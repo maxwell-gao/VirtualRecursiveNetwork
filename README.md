@@ -1,10 +1,7 @@
 # VRN: Virtual Recursive Networks
 
-[](https://opensource.org/licenses/MIT)
-[](https://www.python.org/downloads/release/python-390/)
-[](https://pytorch.org/)
 
-
+[![License: MIT] (https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)] [![PyTorch](https://img.shields.io/badge/PyTorch-2.9.1%2B-orange.svg)](https://pytorch.org/)<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Lightning</title><path d="M12 0L1.75 6v12L12 24l10.25-6V6zm-1.775 18l1.08-4.657-2.428-2.397L13.79 6l-1.082 4.665 2.414 2.384z"/></svg>[![Status: Core Feature Incomplete](https://img.shields.io/badge/Status-Incomplete_Feature:_Virtual_Width-red.svg)](#roadmap)
 ## Architecture
 
 Instead of recursing on single compressed latent $z$ (as in TRM), VRN aims to maintain arbitrary **Over-Width Recursive State ($Z_{virtual}$)**.

@@ -11,21 +11,34 @@
 
 Instead of recursing on single compressed latent $z$ (as in TRM), VRN aims to maintain arbitrary **Over-Width Recursive State ($Z_{virtual}$)**.
 
-<!-- ```mermaid
+```mermaid
 graph TD
-    Input[Input x] --> VWN_Init[VWN Initialization]
-    VWN_Init --> Z_Virtual["Virtual State<br>(High Dim, e.g. 4096)"]
+    Input_Emb(Input Embeddings: High Dim) --> Z_Virtual_Set
     
-    subgraph "Recursive Step (Repeated N times)"
-        Z_Virtual -- "Compress (GHC)" --> Z_Phys["Physical State<br>(Low Dim, e.g. 512)"]
-        Z_Phys --> Transformer["Transformer Backbone<br>(Attention + MLP)"]
-        Transformer --> Z_Out["Output State"]
-        Z_Out -- "Expand (GHC)" --> Z_Update["Update Vector"]
-        Z_Update -- "Residual Add" --> Z_Virtual
+    Z_Virtual_Set(All Virtual States Z)
+    
+    subgraph "Main Recursive Loop (Controlled by Stages)"
+        Z_Virtual_Set -- "1. Select Target z<sub>i</sub>" --> Current_zi(Target State z<sub>i</sub>)
+        
+        Z_Virtual_Set -- "2. Source States (z<sub>j</sub>, z<sub>k</sub>)" --> Aggregation[Aggregate Sources]
+        Input_Emb -- "2. Input Embedding (x)" --> Aggregation
+        
+        Aggregation --> Injection_Vector(Injection Vector)
+        
+        Current_zi --> Target_Update_Point
+        Injection_Vector --> Target_Update_Point
+        
+        Target_Update_Point(Pre-Norm State: z<sub>i</sub> + Injection) -- "3. Compress (GHC)<br>z<sub>i</sub> -> z<sub>i,phys</sub>" --> Z_Phys[Physical State: Low Dim]
+        Z_Phys --> Module(Tiny Transformer Backbone)
+        Module --> Z_Out(Module Output)
+        
+        Z_Out -- "4. Expand (GHC)" --> Z_Update(Update Vector)
+        Z_Update -- "5. Residual Update" --> Z_Virtual_Set
     end
     
-    Z_Virtual -- "Reduce Operator" --> Output["Final Prediction y"]
-``` -->
+    Z_Virtual_Set -- "Readout Selection" --> Readout_State(Final z<sub>readout</sub>)
+    Readout_State -- "Reduce Operator" --> Output[Final Prediction y]
+```
 
 ## Installation
 

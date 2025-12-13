@@ -12,17 +12,17 @@ Instead of recursing on single compressed latent $z$ (as in TRM), VRN aims to ma
 ```mermaid
 graph TD
     Input[Input x] --> VWN_Init[VWN Initialization]
-    VWN_Init --> Z_Virtual{Virtual State\n(High Dim, e.g. 4096)}
+    VWN_Init --> Z_Virtual["Virtual State<br>(High Dim, e.g. 4096)"]
     
     subgraph "Recursive Step (Repeated N times)"
-        Z_Virtual -- Compress (GHC) --> Z_Phys[Physical State\n(Low Dim, e.g. 512)]
-        Z_Phys --> Transformer[Transformer Backbone\n(Attention + MLP)]
-        Transformer --> Z_Out[Output State]
-        Z_Out -- Expand (GHC) --> Z_Update[Update Vector]
-        Z_Update -- Residual Add --> Z_Virtual
+        Z_Virtual -- "Compress (GHC)" --> Z_Phys["Physical State<br>(Low Dim, e.g. 512)"]
+        Z_Phys --> Transformer["Transformer Backbone<br>(Attention + MLP)"]
+        Transformer --> Z_Out["Output State"]
+        Z_Out -- "Expand (GHC)" --> Z_Update["Update Vector"]
+        Z_Update -- "Residual Add" --> Z_Virtual
     end
     
-    Z_Virtual -- Reduce Operator --> Output[Final Prediction y]
+    Z_Virtual -- "Reduce Operator" --> Output["Final Prediction y"]
 ```
 
 ## Installation

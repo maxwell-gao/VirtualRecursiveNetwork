@@ -1,0 +1,32 @@
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@CrossEntropyLossHead
+
+halt_exploration_prob: 0.0
+halt_max_steps: 6
+
+H_cycles: 1
+L_cycles: 2
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+pos_encodings: rope
+forward_dtype: bfloat16
+dropout: 0.0
+
+mlp_t: False
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# DIS Config
+dis_enabled: True
+dis_max_steps: 6
+dis_schedule: linear
+use_step_embedding: True

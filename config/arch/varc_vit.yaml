@@ -1,0 +1,21 @@
+name: vision_reasoning.varc_vit@VARCViT
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.0
+halt_max_steps: 1
+
+# ViT Config
+image_size: 30
+embed_dim: 256
+depth: 6
+num_heads: 8
+mlp_dim: 512
+dropout: 0.1
+num_task_tokens: 1
+patch_size: 2
+
+# Set to 0 to use standard Adam optimizer for all params
+puzzle_emb_ndim: 0
+forward_dtype: bfloat16

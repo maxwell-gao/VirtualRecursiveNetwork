@@ -1,0 +1,49 @@
+program: pretrain.py
+method: random
+project: arc-sweep-stages
+name: stages-random-search
+
+parameters:
+  # Stage 0 (z_L) parameters
+  arch.stages.0.repeat:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+  arch.stages.0.include_inputs:
+    values: [true, false]
+
+  # Stage 1 (z_M) parameters
+  arch.stages.1.repeat:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+  arch.stages.1.include_inputs:
+    values: [true, false]
+
+  # Stage 2 (z_H) parameters
+  arch.stages.2.repeat:
+    distribution: int_uniform
+    min: 1
+    max: 4
+
+command:
+  - ${env}
+  - torchrun
+  - --nproc-per-node=4
+  - ${program}
+  - arch=loop_transformer-3stage
+  - ${args}
+
+metric:
+  name: exact_accuracy
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  max_iter: 10
+  s: 2
+  eta: 3
+

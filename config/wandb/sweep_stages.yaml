@@ -1,0 +1,45 @@
+program: pretrain.py
+method: grid
+project: arc-sweep-stages
+name: stages-hyperparameter-search
+
+parameters:
+  # Stage 0 (z_L) parameters
+  arch.stages.0.repeat:
+    values: [1, 2, 3, 4]
+
+  arch.stages.0.include_inputs:
+    values: [true, false]
+
+  # Stage 1 (z_M) parameters
+  arch.stages.1.repeat:
+    values: [1, 2, 3, 4]
+
+  arch.stages.1.include_inputs:
+    values: [true, false]
+
+  # Stage 2 (z_H) parameters
+  arch.stages.2.repeat:
+    values: [1, 2, 3, 4]
+
+  # Note: Stage 2 does not have include_inputs, so it's not searched
+
+command:
+  - ${env}
+  - torchrun
+  - --nproc-per-node=4
+  - ${program}
+  - arch=loop_transformer-3stage
+  - ${args}
+
+metric:
+  name: exact_accuracy
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  max_iter: 10
+  s: 2
+  eta: 3
+

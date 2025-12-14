@@ -40,6 +40,7 @@ stages:
     repeat: 2
   - target: z_M
     sources: [z_L]
+    include_inputs: true
     repeat: 2
   - target: z_H
     sources: [z_M]

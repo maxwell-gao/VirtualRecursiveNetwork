@@ -20,7 +20,7 @@ pos_encodings: rope
 forward_dtype: bfloat16
 dropout: 0.0
 
-outer_cycles: 2
+outer_cycles: 4
 warmup_cycles: 0
 
 states:

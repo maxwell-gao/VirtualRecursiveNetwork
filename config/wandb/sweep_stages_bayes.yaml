@@ -1,6 +1,6 @@
 program: pretrain.py
 method: bayes
-project: arc-sweep-stages
+project: sudoku-sweep-stages
 name: stages-bayesian-optimization
 
 parameters:
@@ -34,6 +34,16 @@ command:
   - --nproc-per-node=4
   - pretrain_sweep_wrapper.py
   - arch=loop_transformer-3stage
+  - data_paths="[data/sudoku-extreme-1k-aug-1000]"
+  - evaluators="[]"
+  - epochs=50000
+  - eval_interval=5000
+  - lr=1e-4
+  - puzzle_emb_lr=1e-4
+  - weight_decay=1.0
+  - puzzle_emb_weight_decay=1.0
+  - grad_clip_norm=-1.0
+  - ema=True
   - ${args}
 
 metric:

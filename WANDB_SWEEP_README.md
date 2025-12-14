@@ -1,6 +1,6 @@
 # WandB Sweep Configuration Guide
 
-This directory contains WandB Sweep configuration files for searching `stages` parameters in `loop_transformer-3stage.yaml`.
+This directory contains WandB Sweep configuration files for searching `stages` parameters in `loop_transformer-3stage.yaml` on the **Sudoku-Extreme** task.
 
 ## Configuration Files
 
@@ -42,6 +42,22 @@ All configurations search the following stages parameters:
 - **Stage 2 (z_H)**:
   - `repeat`: 1-4
   - (Note: This stage does not have include_inputs by default)
+
+## Task Configuration
+
+**Sudoku-Extreme Task**: All sweep configurations are set up for the Sudoku-Extreme task with the following fixed parameters:
+- **Dataset**: `data/sudoku-extreme-1k-aug-1000`
+- **Evaluators**: `[]` (no evaluators)
+- **Training epochs**: 50000
+- **Evaluation interval**: 5000
+- **Learning rate**: 1e-4
+- **Puzzle embedding LR**: 1e-4
+- **Weight decay**: 1.0
+- **Puzzle embedding weight decay**: 1.0
+- **Gradient clip norm**: -1.0 (disabled)
+- **EMA**: True (Exponential Moving Average enabled)
+
+To use these sweep configs for a different task (e.g., ARC, Maze), modify the `data_paths`, `evaluators`, and other task-specific parameters in the `command` section of the sweep configuration files.
 
 ## Hardware Configuration
 

@@ -106,7 +106,8 @@ Hyperband early stopping is configured:
 
 - **GPUs**: 4x A100
 - **Method**: torchrun with DDP (Distributed Data Parallel)
-- **Command**: `torchrun --nproc-per-node=4 pretrain.py`
+- **Command**: `torchrun --nproc-per-node=4 pretrain_sweep_wrapper.py`
+- **Wrapper Script**: `pretrain_sweep_wrapper.py` is used to convert wandb's `--arg=value` format to Hydra's `arg=value` format
 
 ## Customizing Search Space
 
@@ -128,6 +129,7 @@ parameters:
 4. **Project name**: Modify the `project` field in the config file to specify wandb project name
 5. **Resource consumption**: Grid Search runs all combinations, ensure sufficient computational resources
 6. **Multi-GPU**: The configuration is optimized for 4x A100 GPUs. For different GPU counts, modify `--nproc-per-node` in the command section
+7. **Wrapper script**: The sweep configs use `pretrain_sweep_wrapper.py` to convert wandb's `--arg=value` format to Hydra's `arg=value` format. This script is automatically used by the sweep configurations.
 
 ## Viewing Results
 

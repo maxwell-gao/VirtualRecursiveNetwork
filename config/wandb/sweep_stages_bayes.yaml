@@ -32,7 +32,7 @@ command:
   - ${env}
   - torchrun
   - --nproc-per-node=4
-  - ${program}
+  - pretrain_sweep_wrapper.py
   - arch=loop_transformer-3stage
   - ${args}
 

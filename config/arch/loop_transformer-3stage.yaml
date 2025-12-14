@@ -21,7 +21,7 @@ forward_dtype: bfloat16
 dropout: 0.0
 
 outer_cycles: 4
-warmup_cycles: 0
+warmup_cycles: 2
 
 states:
   - name: z_H

@@ -13,29 +13,25 @@ Instead of recursing on single compressed latent $z$ (as in TRM), VRN aims to ma
 
 ```mermaid
 graph TD
-    Input_Emb(Input Embeddings: High Dim) --> Z_Virtual_Set
-    
+    Input_Emb(Input Embeddings: High Dim)
     Z_Virtual_Set(All Virtual States Z)
-    
-    subgraph "Main Recursive Loop (Controlled by Stages)"
-        Z_Virtual_Set -- "1. Select Target z<sub>i</sub>" --> Current_zi(Target State z<sub>i</sub>)
-        
-        Z_Virtual_Set -- "2. Source States (z<sub>j</sub>, z<sub>k</sub>)" --> Aggregation[Aggregate Sources]
-        Input_Emb -- "2. Input Embedding (x)" --> Aggregation
-        
-        Aggregation --> Injection_Vector(Injection Vector)
-        
-        Current_zi --> Target_Update_Point
-        Injection_Vector --> Target_Update_Point
-        
-        Target_Update_Point(Pre-Norm State: z<sub>i</sub> + Injection) -- "3. Compress (GHC)<br>z<sub>i</sub> -> z<sub>i,phys</sub>" --> Z_Phys[Physical State: Low Dim]
-        Z_Phys --> Module(Tiny Transformer Backbone)
-        Module --> Z_Out(Module Output)
-        
-        Z_Out -- "4. Expand (GHC)" --> Z_Update(Update Vector)
-        Z_Update -- "5. Residual Update" --> Z_Virtual_Set
+
+    Input_Emb --> Z_Virtual_Set
+
+    subgraph "Main Recursive Loop"
+      Z_Virtual_Set -- "1. Select Target z<sub>i</sub>" --> Current_zi(Target State z<sub>i</sub>)
+      Z_Virtual_Set -- "2. Source States (z<sub>j</sub>, z<sub>k</sub>)" --> Aggregation[Aggregate Sources]
+      Aggregation --> Injection_Vector(Injection Vector)
+      Current_zi --> Target_Update_Point
+      Injection_Vector --> Target_Update_Point
+      Target_Update_Point(Pre-Norm State: z<sub>i</sub> + Injection) -- "3. Compress (GHC)<br>z<sub>i</sub> -> z<sub>i,phys</sub>" --> Z_Phys[Physical State: Low Dim]
+      Z_Phys --> Module(Tiny Transformer Backbone)
+      Module --> Z_Out(Module Output)
+      Z_Out -- "4. Expand (GHC)" --> Z_Update(Update Vector)
+      Z_Update -- "5. Residual Update" --> Z_Virtual_Set
     end
-    
+
+    Input_Emb -- "2. Input Embedding (x)" --> Aggregation
     Z_Virtual_Set -- "Readout Selection" --> Readout_State(Final z<sub>readout</sub>)
     Readout_State -- "Reduce Operator" --> Output[Final Prediction y]
 ```
@@ -170,7 +166,7 @@ data_paths='[data/sudoku-extreme-1k-aug-1000]' evaluators='[]' \
 epochs=50000 eval_interval=5000 \
 +optimizer=muon \
 lr=0.0003 weight_decay=1.0 \
-+muon_lr=0.0005 +muon_weight_decay=1.0 \
++muon_lr=0.001 +muon_weight_decay=0.1 \
 puzzle_emb_lr=1e-4 puzzle_emb_weight_decay=1.0 \
 grad_clip_norm=-1.0 \
 run_name="pretrain_sudoku_muon-fixed-wd" \

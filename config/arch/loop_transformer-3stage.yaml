@@ -9,6 +9,8 @@ act_enabled: true
 act_inference: false
 no_ACT_continue: true
 
+gradient_checkpointing: true
+
 hidden_size: 512
 num_heads: 8
 expansion: 4

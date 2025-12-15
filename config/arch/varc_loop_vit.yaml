@@ -14,7 +14,7 @@ metric_eps_w: 0.5
 halt_exploration_prob: 0.1
 halt_max_steps: 16
 act_enabled: true
-act_inference: true
+act_inference: false
 no_ACT_continue: true
 
 # Transformer config

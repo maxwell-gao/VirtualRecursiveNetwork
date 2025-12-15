@@ -157,6 +157,12 @@ class LoopTransformerInner(nn.Module):
         self.config = config
         self.forward_dtype = getattr(torch, config.forward_dtype)
 
+        # Guardrails to avoid NaNs/Infs propagating through ACT heads when using
+        # more exotic patch embeddings (e.g., metric deform conv). These limits
+        # are intentionally conservative to preserve gradients while preventing
+        # non-finite values from breaking training.
+        self._logit_clip = 1e4
+
         self.embed_scale = math.sqrt(config.hidden_size)
         embed_init_std = 1.0 / self.embed_scale
 
@@ -454,6 +460,15 @@ class LoopTransformerInner(nn.Module):
         halt_source = states[self.halt_state]
         q_halt_logits, q_continue_logits = (
             self.q_head(halt_source[:, 0]).to(torch.float32).chunk(2, dim=-1)
+        )
+
+        # Defensive guards: prevent NaN/Inf from propagating to the loss/ACT logic.
+        logits = torch.nan_to_num(logits, nan=0.0, posinf=self._logit_clip, neginf=-self._logit_clip)
+        q_halt_logits = torch.nan_to_num(
+            q_halt_logits, nan=-5.0, posinf=self._logit_clip, neginf=-self._logit_clip
+        )
+        q_continue_logits = torch.nan_to_num(
+            q_continue_logits, nan=0.0, posinf=self._logit_clip, neginf=-self._logit_clip
         )
 
         inner_carry = LoopTransformerInnerCarry(states=new_states)

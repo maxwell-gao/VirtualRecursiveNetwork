@@ -32,7 +32,7 @@ from models.layers import (
     CastedEmbedding,
     CastedLinear,
 )
-from models.sparse_embedding import CastedSparseEmbedding
+from models.embed.sparse import CastedSparseEmbedding
 
 
 @dataclass

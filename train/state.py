@@ -15,7 +15,7 @@ from muon import MuonWithAuxAdam
 from train.config import PretrainConfig
 from puzzle_dataset import PuzzleDatasetMetadata
 from utils.functions import load_model_class
-from models.sparse_embedding import CastedSparseEmbeddingSignSGD_Distributed
+from models.embed.sparse import CastedSparseEmbeddingSignSGD_Distributed
 
 
 @dataclass

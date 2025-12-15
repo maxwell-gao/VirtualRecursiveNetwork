@@ -21,7 +21,7 @@ from models.layers import (
     CastedEmbedding,
     CastedLinear,
 )
-from models.sparse_embedding import CastedSparseEmbedding
+from models.embed.sparse import CastedSparseEmbedding
 
 
 @dataclass
@@ -61,7 +61,7 @@ class LoopTransformerConfig(BaseModel):
     hidden_size: int
     expansion: float
     num_heads: int
-    pos_encodings: str
+    pos_encodings: str = "rope"
     forward_dtype: str = "bfloat16"
     rms_norm_eps: float = 1e-5
     rope_theta: float = 10000.0
@@ -90,35 +90,46 @@ class LoopTransformerConfig(BaseModel):
     readout_state: str
     halt_state: Optional[str] = None
 
+    # === Patch Embedding (ViT-style) ===
+    # "none" = token embedding (default), "standard" = ViT, "metric" = MetricConvolutions
+    patch_embed_type: str = "none"
+    patch_size: int = 3
+    image_size: Optional[int] = None  # Auto-computed from seq_len if None
+    metric_eps_w: float = 0.5
+
+    def model_post_init(self, __context) -> None:
+        """Auto-compute image_size from seq_len if using patches."""
+        if self.patch_embed_type != "none" and self.image_size is None:
+            size = int(math.sqrt(self.seq_len))
+            if size * size != self.seq_len:
+                raise ValueError(f"seq_len={self.seq_len} must be a perfect square for patch embedding")
+            object.__setattr__(self, "image_size", size)
+
 
 class LoopTransformerBlock(nn.Module):
-    def __init__(self, config: LoopTransformerConfig) -> None:
+    def __init__(self, config) -> None:
         super().__init__()
-        self.config = config
         self.self_attn = Attention(
             hidden_size=config.hidden_size,
             head_dim=config.hidden_size // config.num_heads,
             num_heads=config.num_heads,
             num_key_value_heads=config.num_heads,
             causal=False,
-            dropout=config.dropout,
+            dropout=getattr(config, "dropout", 0.0),
         )
         self.mlp = SwiGLU(hidden_size=config.hidden_size, expansion=config.expansion)
-        self.norm_eps = config.rms_norm_eps
-        self.dropout = nn.Dropout(config.dropout)
+        self.norm_eps = getattr(config, "rms_norm_eps", 1e-5)
+        self.dropout = nn.Dropout(getattr(config, "dropout", 0.0))
 
     def forward(
         self, cos_sin: Optional[CosSin], hidden_states: torch.Tensor
     ) -> torch.Tensor:
-        # Pre-Norm structure for better stability
         normed_states = rms_norm(hidden_states, variance_epsilon=self.norm_eps)
         hidden_states = hidden_states + self.dropout(
             self.self_attn(cos_sin=cos_sin, hidden_states=normed_states)
         )
-
         normed_states = rms_norm(hidden_states, variance_epsilon=self.norm_eps)
         hidden_states = hidden_states + self.dropout(self.mlp(normed_states))
-
         return hidden_states
 
 
@@ -149,18 +160,51 @@ class LoopTransformerInner(nn.Module):
         self.embed_scale = math.sqrt(config.hidden_size)
         embed_init_std = 1.0 / self.embed_scale
 
-        self.embed_tokens = CastedEmbedding(
-            config.vocab_size,
-            config.hidden_size,
-            init_std=embed_init_std,
-            cast_to=self.forward_dtype,
-        )
+        # === Input Embedding: Token or Patch ===
+        self.patch_embed = None
+        self.num_patches = None
+        
+        if config.patch_embed_type == "none":
+            # Standard token embedding
+            self.embed_tokens = CastedEmbedding(
+                config.vocab_size,
+                config.hidden_size,
+                init_std=embed_init_std,
+                cast_to=self.forward_dtype,
+            )
+            input_seq_len = config.seq_len
+        else:
+            # Patch embedding (ViT-style)
+            from models.embed.patch import StandardPatchEmbed, MetricPatchEmbed
+            
+            self.num_patches = (config.image_size // config.patch_size) ** 2
+            input_seq_len = self.num_patches
+            
+            if config.patch_embed_type == "standard":
+                self.patch_embed = StandardPatchEmbed(
+                    image_size=config.image_size,
+                    patch_size=config.patch_size,
+                    vocab_size=config.vocab_size,
+                    hidden_size=config.hidden_size,
+                )
+            elif config.patch_embed_type == "metric":
+                self.patch_embed = MetricPatchEmbed(
+                    image_size=config.image_size,
+                    patch_size=config.patch_size,
+                    vocab_size=config.vocab_size,
+                    hidden_size=config.hidden_size,
+                    eps_w=config.metric_eps_w,
+                )
+            else:
+                raise ValueError(f"Unknown patch_embed_type: {config.patch_embed_type}")
+
         self.lm_head = CastedLinear(config.hidden_size, config.vocab_size, bias=False)
         self.q_head = CastedLinear(config.hidden_size, 2, bias=True)
 
         if config.dis_enabled:
             self.step_emb = nn.Embedding(config.dis_max_steps, config.hidden_size)
 
+        # Puzzle embedding
         puzzle_len = (
             -(config.puzzle_emb_ndim // -config.hidden_size)
             if (config.puzzle_emb_ndim > 0 and not config.puzzle_emb_len)
@@ -177,25 +221,31 @@ class LoopTransformerInner(nn.Module):
                 cast_to=self.forward_dtype,
             )
 
+        # Positional encoding
+        total_seq_len = input_seq_len + self.puzzle_emb_len
+        self._input_seq_len = input_seq_len
+        
         if config.pos_encodings == "rope":
             self.rotary_emb = RotaryEmbedding(
                 dim=config.hidden_size // config.num_heads,
-                max_position_embeddings=config.seq_len + self.puzzle_emb_len,
+                max_position_embeddings=total_seq_len,
                 base=config.rope_theta,
             )
         elif config.pos_encodings == "learned":
             self.embed_pos = CastedEmbedding(
-                config.seq_len + self.puzzle_emb_len,
+                total_seq_len,
                 config.hidden_size,
                 init_std=embed_init_std,
                 cast_to=self.forward_dtype,
             )
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"Unknown pos_encodings: {config.pos_encodings}")
 
+        # State modules
         self.state_names = [state.name for state in config.states]
         self.state_modules = nn.ModuleDict()
         self._state_module_refs: Dict[str, LoopReasoningModule] = {}
+        
         for state_cfg in config.states:
             if state_cfg.share_weights_with is not None:
                 if state_cfg.share_weights_with not in self._state_module_refs:
@@ -213,11 +263,7 @@ class LoopTransformerInner(nn.Module):
             init = trunc_normal_init_(
                 torch.empty(config.hidden_size, dtype=self.forward_dtype), std=1
             )
-            self.register_buffer(
-                f"{state_cfg.name}_init",
-                init,
-                persistent=True,
-            )
+            self.register_buffer(f"{state_cfg.name}_init", init, persistent=True)
 
         with torch.no_grad():
             self.q_head.weight.zero_()
@@ -232,8 +278,14 @@ class LoopTransformerInner(nn.Module):
         return self.config.halt_state or self.config.readout_state
 
     def _input_embeddings(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
-        embedding = self.embed_tokens(batch["inputs"].to(torch.int32))
+        if self.patch_embed is not None:
+            # Patch embedding mode
+            embedding = self.patch_embed(batch["inputs"]).to(self.forward_dtype)
+        else:
+            # Token embedding mode
+            embedding = self.embed_tokens(batch["inputs"].to(torch.int32))
 
+        # Puzzle embedding
         if self.config.puzzle_emb_ndim > 0:
             puzzle_embedding = self.puzzle_emb(batch["puzzle_identifiers"])
             pad_count = (
@@ -244,9 +296,7 @@ class LoopTransformerInner(nn.Module):
                 puzzle_embedding = F.pad(puzzle_embedding, (0, pad_count))
             embedding = torch.cat(
                 (
-                    puzzle_embedding.view(
-                        -1, self.puzzle_emb_len, self.config.hidden_size
-                    ),
+                    puzzle_embedding.view(-1, self.puzzle_emb_len, self.config.hidden_size),
                     embedding,
                 ),
                 dim=-2,
@@ -259,14 +309,20 @@ class LoopTransformerInner(nn.Module):
 
         return self.embed_scale * embedding
 
+    def _upsample_to_full(self, h: torch.Tensor, batch_size: int) -> torch.Tensor:
+        """Upsample patch representations back to full resolution."""
+        if self.patch_embed is None:
+            return h  # No upsampling needed for token mode
+        
+        ps = self.config.image_size // self.config.patch_size
+        h_grid = h.view(batch_size, ps, ps, -1).permute(0, 3, 1, 2)
+        upsampled = F.interpolate(h_grid, self.config.image_size, mode="nearest")
+        return upsampled.permute(0, 2, 3, 1).reshape(batch_size, -1, self.config.hidden_size)
+
     def empty_carry(self, batch_size: int) -> LoopTransformerInnerCarry:
-        device = self.embed_tokens.embedding_weight.device
+        device = self.lm_head.weight.device
         states = {}
-        shape = (
-            batch_size,
-            self.config.seq_len + self.puzzle_emb_len,
-            self.config.hidden_size,
-        )
+        shape = (batch_size, self._input_seq_len + self.puzzle_emb_len, self.config.hidden_size)
         for name in self.state_names:
             states[name] = torch.empty(shape, dtype=self.forward_dtype, device=device)
         return LoopTransformerInnerCarry(states=states)
@@ -346,24 +402,20 @@ class LoopTransformerInner(nn.Module):
         carry: LoopTransformerInnerCarry,
         batch: Dict[str, torch.Tensor],
         step_ids: Optional[torch.Tensor] = None,
-    ) -> Tuple[
-        LoopTransformerInnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]
-    ]:
+    ) -> Tuple[LoopTransformerInnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
         input_embeddings = self._input_embeddings(batch)
+        batch_size = input_embeddings.shape[0]
 
         if self.config.dis_enabled and step_ids is not None:
-            # Ensure step_ids is a tensor on the correct device
             if not isinstance(step_ids, torch.Tensor):
                 step_ids = torch.tensor(
                     step_ids, device=input_embeddings.device, dtype=torch.long
                 )
-            # If scalar, expand to batch size
             if step_ids.ndim == 0:
-                step_ids = step_ids.expand(input_embeddings.shape[0])
-
+                step_ids = step_ids.expand(batch_size)
             input_embeddings = input_embeddings + self.step_emb(step_ids).unsqueeze(1)
 
         states = {name: tensor for name, tensor in carry.states.items()}
@@ -391,7 +443,14 @@ class LoopTransformerInner(nn.Module):
 
         new_states = {name: tensor.detach() for name, tensor in states.items()}
         readout = states[self.readout_state]
-        logits = self.lm_head(readout)[:, self.puzzle_emb_len :]
+        
+        # Handle output: upsample if using patches
+        readout_for_lm = readout[:, self.puzzle_emb_len:]
+        if self.patch_embed is not None:
+            readout_for_lm = self._upsample_to_full(readout_for_lm, batch_size)
+        
+        logits = self.lm_head(readout_for_lm)
+        
         halt_source = states[self.halt_state]
         q_halt_logits, q_continue_logits = (
             self.q_head(halt_source[:, 0]).to(torch.float32).chunk(2, dim=-1)
@@ -401,10 +460,7 @@ class LoopTransformerInner(nn.Module):
         return (
             inner_carry,
             logits,
-            (
-                q_halt_logits.squeeze(-1),
-                q_continue_logits.squeeze(-1),
-            ),
+            (q_halt_logits.squeeze(-1), q_continue_logits.squeeze(-1)),
         )
 
 
@@ -424,10 +480,7 @@ class LoopTransformerModel_ACT(nn.Module):
         inner = self.inner.empty_carry(batch_size)
         zeros = torch.zeros((batch_size,), dtype=torch.int32, device=device)
         halted = torch.ones((batch_size,), dtype=torch.bool, device=device)
-
-        # Initialize inner states
         inner = self.inner.reset_carry(halted, inner)
-
         current_data = {k: v for k, v in batch.items()}
         return LoopTransformerCarry(inner, zeros, halted, current_data)
 

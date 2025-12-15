@@ -1,3 +1,9 @@
+"""
+Sparse Embedding for puzzle identifiers.
+
+Supports distributed training with SignSGD optimizer.
+"""
+
 from typing import Union
 
 import torch

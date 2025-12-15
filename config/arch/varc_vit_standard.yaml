@@ -1,27 +1,44 @@
-# VARCViT - Standard ViT Baseline for ARC
+# VARCViT Standard - ViT baseline using LoopTransformer
 
-name: vision_reasoning.varc_vit@VARCViT
+name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
 loss:
   name: losses@ACTLossHead
   loss_type: stablemax_cross_entropy
+
+# Patch embedding mode
+patch_embed_type: standard
+patch_size: 3
 
 # ACT config
 halt_exploration_prob: 0.0
 halt_max_steps: 1
 act_enabled: false
 act_inference: false
+no_ACT_continue: true
 
-# Patch config (image_size auto-computed from seq_len)
-patch_size: 3
-
-# Transformer config (aligned with loop_transformer)
-hidden_size: 256
-depth: 6
+# Transformer config
+hidden_size: 512
 num_heads: 8
-expansion: 2.0
+expansion: 4
+
+pos_encodings: rope
+forward_dtype: bfloat16
 dropout: 0.0
 
-# Puzzle embedding
-puzzle_emb_ndim: 0
+outer_cycles: 1
+warmup_cycles: 0
 
-forward_dtype: bfloat16
+# Sequential ViT architecture
+states:
+  - name: z
+    layers: 6
+
+stages:
+  - target: z
+    include_inputs: true
+    repeat: 1
+
+readout_state: z
+halt_state: z
+
+puzzle_emb_ndim: 0

@@ -1,22 +1,29 @@
-# VARCViT - Default config (same as varc_vit_standard)
+# VARCMetricViT - ViT with Metric Convolutions Patch Embedding
 
-name: vision_reasoning.varc_vit@VARCViT
+name: vision_reasoning.varc_vit@VARCMetricViT
 loss:
   name: losses@ACTLossHead
   loss_type: stablemax_cross_entropy
 
+# ACT config
 halt_exploration_prob: 0.0
 halt_max_steps: 1
 act_enabled: false
 act_inference: false
 
+# Patch config
 patch_size: 3
+use_metric_patch: true
+metric_eps_w: 0.5  # 0.5 = asymmetric, 1.0 = pure Riemannian
 
+# Transformer config
 hidden_size: 256
 depth: 6
 num_heads: 8
 expansion: 2.0
 dropout: 0.0
 
+# Puzzle embedding
 puzzle_emb_ndim: 0
+
 forward_dtype: bfloat16

@@ -25,13 +25,13 @@ pos_encodings: rope
 forward_dtype: bfloat16
 dropout: 0.0
 
-outer_cycles: 1
+outer_cycles: 6
 warmup_cycles: 0
 
 # Simple sequential architecture (like standard ViT)
 states:
   - name: z
-    layers: 6
+    layers: 1
 
 stages:
   - target: z

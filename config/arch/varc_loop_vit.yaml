@@ -7,7 +7,7 @@ loss:
 
 # Patch embedding mode - Metric Convolutions
 patch_embed_type: metric
-patch_size: 1
+patch_size: 3
 metric_eps_w: 0.5
 
 # ACT config (multi-step reasoning)

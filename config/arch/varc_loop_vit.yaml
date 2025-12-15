@@ -12,7 +12,7 @@ metric_eps_w: 0.5
 
 # ACT config (multi-step reasoning)
 halt_exploration_prob: 0.1
-halt_max_steps: 8
+halt_max_steps: 16
 act_enabled: true
 act_inference: true
 no_ACT_continue: true

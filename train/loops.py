@@ -244,9 +244,7 @@ def train_batch(
                     param_group["lr"] = lr_this_step
 
             if config.grad_clip_norm > 0.0:
-                fabric.clip_gradients(
-                    train_state.model, optim, max_norm=config.grad_clip_norm
-                )
+                _safe_clip_gradients(train_state.model, config.grad_clip_norm)
 
             optim.step()
             optim.zero_grad()

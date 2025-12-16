@@ -20,8 +20,8 @@ pos_encodings: rope
 forward_dtype: bfloat16
 dropout: 0.0
 
-outer_cycles: 1
-warmup_cycles: 0
+outer_cycles: 3
+warmup_cycles: 2
 
 states:
   - name: z_H
@@ -37,14 +37,14 @@ stages:
   - target: z_L
     sources: [z_H]
     include_inputs: true
-    repeat: 2
+    repeat: 6
   - target: z_M
     sources: [z_L]
     include_inputs: true
-    repeat: 2
+    repeat: 3
   - target: z_H
     sources: [z_M]
-    repeat: 2
+    repeat: 1
 
 readout_state: z_H
 halt_state: z_H

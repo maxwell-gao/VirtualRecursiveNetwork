@@ -16,18 +16,6 @@ from train.dis_utils import get_dis_target
 from models.losses import IGNORE_LABEL_ID
 
 
-def _safe_clip_gradients(model: torch.nn.Module, max_norm: float) -> None:
-    """Clip gradients while tolerating non-finite values by cleaning them first."""
-    if max_norm is None or max_norm <= 0:
-        return
-    params = [p for p in model.parameters() if p.grad is not None]
-    if not params:
-        return
-    for p in params:
-        torch.nan_to_num_(p.grad, nan=0.0, posinf=1e4, neginf=-1e4)
-    torch.nn.utils.clip_grad_norm_(params, max_norm, error_if_nonfinite=False)
-
-
 def train_batch(
     config: PretrainConfig,
     train_state: TrainState,
@@ -201,7 +189,9 @@ def train_batch(
                     param_group["lr"] = lr_this_step
 
             if config.grad_clip_norm > 0.0:
-                _safe_clip_gradients(train_state.model, config.grad_clip_norm)
+                fabric.clip_gradients(
+                    train_state.model, optim, max_norm=config.grad_clip_norm
+                )
 
             optim.step()
             optim.zero_grad()
@@ -244,7 +234,9 @@ def train_batch(
                     param_group["lr"] = lr_this_step
 
             if config.grad_clip_norm > 0.0:
-                _safe_clip_gradients(train_state.model, config.grad_clip_norm)
+                fabric.clip_gradients(
+                    train_state.model, optim, max_norm=config.grad_clip_norm
+                )
 
             optim.step()
             optim.zero_grad()

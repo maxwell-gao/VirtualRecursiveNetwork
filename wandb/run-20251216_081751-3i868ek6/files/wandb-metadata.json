@@ -1,0 +1,31 @@
+{
+  "os": "Linux-5.10.0-36-cloud-amd64-x86_64-with-glibc2.31",
+  "python": "CPython 3.10.17",
+  "startedAt": "2025-12-16T08:17:51.597099Z",
+  "args": [
+    "arch=loop_transformer",
+    "data_paths=[data/sudoku-extreme-1k-aug-1000]",
+    "evaluators=[]",
+    "epochs=50000",
+    "eval_interval=5000",
+    "lr=1e-4",
+    "puzzle_emb_lr=1e-4",
+    "weight_decay=1.0",
+    "puzzle_emb_weight_decay=1.0",
+    "grad_clip_norm=-1.0",
+    "run_name=pretrain_fabric_sudoku-loop_tf",
+    "ema=True"
+  ],
+  "program": "/home/maxwell/VirtualRecursiveNetwork/pretrain.py",
+  "codePath": "pretrain.py",
+  "codePathLocal": "pretrain.py",
+  "git": {
+    "remote": "https://github.com/maxwell-gao/VirtualRecursiveNetwork.git",
+    "commit": "e3b3dfc4f43872c3a507e48eac3e5c5c0379e9a5"
+  },
+  "email": "Maxwell-Gao314@outlook.com",
+  "root": "/home/maxwell/VirtualRecursiveNetwork",
+  "host": "instance-20251202-130510-20251205-052007",
+  "executable": "/home/maxwell/TinyRecursiveModels/TinyRecursiveModels/.venv/bin/python",
+  "writerId": "gl00pwlua35nnn6g5m3pyo89qlxljz1h"
+}

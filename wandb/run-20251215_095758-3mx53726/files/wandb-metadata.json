@@ -1,0 +1,31 @@
+{
+  "os": "Linux-5.10.0-36-cloud-amd64-x86_64-with-glibc2.31",
+  "python": "CPython 3.11.14",
+  "startedAt": "2025-12-15T09:57:58.545621Z",
+  "args": [
+    "arch=varc_metric_vit",
+    "data_paths=[data/sudoku-extreme-1k-aug-1000]",
+    "evaluators=[]",
+    "epochs=50000",
+    "eval_interval=5000",
+    "lr=1e-4",
+    "puzzle_emb_lr=1e-4",
+    "weight_decay=1.0",
+    "puzzle_emb_weight_decay=1.0",
+    "grad_clip_norm=-1.0",
+    "run_name=pretrain_sudoku-varc_metric_vit",
+    "ema=True"
+  ],
+  "program": "/home/maxwell/VirtualRecursiveNetwork/pretrain.py",
+  "codePath": "pretrain.py",
+  "codePathLocal": "pretrain.py",
+  "git": {
+    "remote": "https://github.com/maxwell-gao/VirtualRecursiveNetwork.git",
+    "commit": "965f24f8de1ddc5b483618fa344bd7088997c3de"
+  },
+  "email": "Maxwell-Gao314@outlook.com",
+  "root": "/home/maxwell/VirtualRecursiveNetwork",
+  "host": "instance-20251202-130510-20251205-052007",
+  "executable": "/home/maxwell/VirtualRecursiveNetwork/.venv/bin/python",
+  "writerId": "7k6k66pdt6ozwnhpdn7kaylkvvyoh5gg"
+}

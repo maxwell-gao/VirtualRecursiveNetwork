@@ -1,0 +1,1 @@
+{"train/lm_loss":NaN,"num_params":3466430,"train/q_halt_accuracy":0,"train/lr":6.955e-05,"train/steps":0,"_step":1391,"train/accuracy":0,"train/count":0,"_runtime":102.072825059,"_timestamp":1.7657926426815388e+09,"train/q_halt_loss":NaN,"train/exact_accuracy":0,"_wandb":{"runtime":102}}

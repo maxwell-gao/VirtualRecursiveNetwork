@@ -1,0 +1,34 @@
+{
+  "os": "Linux-5.10.0-36-cloud-amd64-x86_64-with-glibc2.31",
+  "python": "CPython 3.11.14",
+  "startedAt": "2025-12-15T14:23:28.154683Z",
+  "args": [
+    "arch=varc_loop_vit",
+    "data_paths=[data/maze-30x30-hard-1k]",
+    "evaluators=[]",
+    "epochs=25000",
+    "eval_interval=5000",
+    "lr=1e-5",
+    "puzzle_emb_lr=1e-4",
+    "weight_decay=1.0",
+    "puzzle_emb_weight_decay=1.0",
+    "run_name=pretrain_loop_trm_maze30x30-25k-varc_loop_vit",
+    "ema=True",
+    "early_stopping=True",
+    "early_stopping_patience=5",
+    "early_stopping_monitor=exact_accuracy",
+    "early_stopping_mode=max"
+  ],
+  "program": "/home/maxwell/VirtualRecursiveNetwork/pretrain.py",
+  "codePath": "pretrain.py",
+  "codePathLocal": "pretrain.py",
+  "git": {
+    "remote": "https://github.com/maxwell-gao/VirtualRecursiveNetwork.git",
+    "commit": "dcf2cc6443324b7e9f93b84a611a5d9607869048"
+  },
+  "email": "Maxwell-Gao314@outlook.com",
+  "root": "/home/maxwell/VirtualRecursiveNetwork",
+  "host": "instance-20251202-130510-20251205-052007",
+  "executable": "/home/maxwell/VirtualRecursiveNetwork/.venv/bin/python",
+  "writerId": "skke0u0h7tq16lckhc5eav9fhcaozfnz"
+}

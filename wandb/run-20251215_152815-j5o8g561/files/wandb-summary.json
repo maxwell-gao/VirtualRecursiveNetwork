@@ -1,0 +1,1 @@
+{"train/q_halt_accuracy":0,"num_params":3415042,"train/lr":1.65e-06,"train/count":0,"_step":110,"train/lm_loss":1.7917594692280547,"_timestamp":1.765812883207666e+09,"train/steps":0,"_runtime":389.393495784,"train/exact_accuracy":0,"_wandb":{"runtime":389},"train/q_halt_loss":0.006715297698974609,"train/accuracy":0}

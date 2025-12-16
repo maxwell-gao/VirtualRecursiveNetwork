@@ -1,0 +1,157 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        e:
+            gl00pwlua35nnn6g5m3pyo89qlxljz1h:
+                args:
+                    - arch=loop_transformer
+                    - data_paths=[data/sudoku-extreme-1k-aug-1000]
+                    - evaluators=[]
+                    - epochs=50000
+                    - eval_interval=5000
+                    - lr=1e-4
+                    - puzzle_emb_lr=1e-4
+                    - weight_decay=1.0
+                    - puzzle_emb_weight_decay=1.0
+                    - grad_clip_norm=-1.0
+                    - run_name=pretrain_fabric_sudoku-loop_tf
+                    - ema=True
+                codePath: pretrain.py
+                codePathLocal: pretrain.py
+                email: Maxwell-Gao314@outlook.com
+                executable: /home/maxwell/TinyRecursiveModels/TinyRecursiveModels/.venv/bin/python
+                git:
+                    commit: e3b3dfc4f43872c3a507e48eac3e5c5c0379e9a5
+                    remote: https://github.com/maxwell-gao/VirtualRecursiveNetwork.git
+                host: instance-20251202-130510-20251205-052007
+                os: Linux-5.10.0-36-cloud-amd64-x86_64-with-glibc2.31
+                program: /home/maxwell/VirtualRecursiveNetwork/pretrain.py
+                python: CPython 3.10.17
+                root: /home/maxwell/VirtualRecursiveNetwork
+                startedAt: "2025-12-16T08:17:51.597099Z"
+                writerId: gl00pwlua35nnn6g5m3pyo89qlxljz1h
+        m: []
+        python_version: 3.10.17
+        t:
+            "1":
+                - 1
+                - 41
+                - 50
+                - 106
+            "2":
+                - 1
+                - 41
+                - 50
+                - 106
+            "3":
+                - 13
+                - 16
+                - 61
+            "4": 3.10.17
+            "5": 0.23.0
+            "12": 0.23.0
+            "13": linux-x86_64
+arch:
+    value:
+        act_enabled: true
+        act_inference: false
+        dropout: 0
+        expansion: 4
+        forward_dtype: bfloat16
+        halt_exploration_prob: 0.1
+        halt_max_steps: 16
+        halt_state: z_H
+        hidden_size: 512
+        loss:
+            loss_type: stablemax_cross_entropy
+            name: losses@ACTLossHead
+        name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
+        no_ACT_continue: true
+        num_heads: 8
+        outer_cycles: 3
+        pos_encodings: rope
+        puzzle_emb_len: 16
+        puzzle_emb_ndim: 512
+        readout_state: z_H
+        stages:
+            - '{''target'': ''z_L'', ''sources'': [''z_H''], ''include_inputs'': True, ''repeat'': 6}'
+            - '{''target'': ''z_H'', ''sources'': [''z_L''], ''repeat'': 3}'
+        states:
+            - '{''name'': ''z_H'', ''layers'': 1}'
+            - '{''name'': ''z_L'', ''layers'': 1, ''share_weights_with'': ''z_H''}'
+        warmup_cycles: 2
+beta1:
+    value: 0.9
+beta2:
+    value: 0.95
+checkpoint_every_eval:
+    value: true
+checkpoint_path:
+    value: checkpoints/Sudoku-extreme-1k-aug-1000-ACT-torch/pretrain_fabric_sudoku-loop_tf
+data_paths:
+    value:
+        - data/sudoku-extreme-1k-aug-1000
+data_paths_test:
+    value: []
+early_stopping:
+    value: false
+early_stopping_min_delta:
+    value: 0
+early_stopping_mode:
+    value: max
+early_stopping_monitor:
+    value: exact_accuracy
+early_stopping_patience:
+    value: 3
+ema:
+    value: true
+ema_rate:
+    value: 0.999
+epochs:
+    value: 50000
+eval_interval:
+    value: 5000
+eval_save_outputs:
+    value: []
+evaluators:
+    value: []
+freeze_weights:
+    value: false
+global_batch_size:
+    value: 768
+grad_clip_norm:
+    value: -1
+load_checkpoint:
+    value: null
+lr:
+    value: 0.0001
+lr_min_ratio:
+    value: 1
+lr_warmup_steps:
+    value: 2000
+min_eval_interval:
+    value: 0
+muon_lr:
+    value: 0.002
+muon_momentum:
+    value: 0.95
+muon_nesterov:
+    value: true
+muon_ns_steps:
+    value: 5
+muon_weight_decay:
+    value: 0.01
+optimizer:
+    value: adam_atan2
+project_name:
+    value: Sudoku-extreme-1k-aug-1000-ACT-torch
+puzzle_emb_lr:
+    value: 0.0001
+puzzle_emb_weight_decay:
+    value: 1
+run_name:
+    value: pretrain_fabric_sudoku-loop_tf
+seed:
+    value: 0
+weight_decay:
+    value: 1

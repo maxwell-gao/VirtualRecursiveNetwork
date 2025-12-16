@@ -1,0 +1,163 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        code_path: source-Maze-30x30-hard-1k-ACT-torch-pretrain.py
+        e:
+            jxgjce0esul1rwpyia6c6e083m17qgiw:
+                args:
+                    - arch=varc_loop_vit
+                    - data_paths=[data/maze-30x30-hard-1k]
+                    - evaluators=[]
+                    - epochs=25000
+                    - eval_interval=5000
+                    - lr=1e-5
+                    - puzzle_emb_lr=1e-4
+                    - weight_decay=1.0
+                    - puzzle_emb_weight_decay=1.0
+                    - run_name=pretrain_loop_trm_maze30x30-25k-varc_loop_vit
+                    - ema=True
+                    - early_stopping=True
+                    - early_stopping_patience=5
+                    - early_stopping_monitor=exact_accuracy
+                    - early_stopping_mode=max
+                codePath: pretrain.py
+                codePathLocal: pretrain.py
+                email: Maxwell-Gao314@outlook.com
+                executable: /home/maxwell/VirtualRecursiveNetwork/.venv/bin/python
+                git:
+                    commit: 01331246ecf6b59154b675006f70b38dfd8f2774
+                    remote: https://github.com/maxwell-gao/VirtualRecursiveNetwork.git
+                host: instance-20251202-130510-20251205-052007
+                os: Linux-5.10.0-36-cloud-amd64-x86_64-with-glibc2.31
+                program: /home/maxwell/VirtualRecursiveNetwork/pretrain.py
+                python: CPython 3.11.14
+                root: /home/maxwell/VirtualRecursiveNetwork
+                startedAt: "2025-12-15T14:19:02.302250Z"
+                writerId: jxgjce0esul1rwpyia6c6e083m17qgiw
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 1
+                - 41
+                - 50
+                - 106
+            "2":
+                - 1
+                - 41
+                - 50
+                - 106
+            "3":
+                - 13
+                - 16
+                - 61
+            "4": 3.11.14
+            "5": 0.23.0
+            "12": 0.23.0
+            "13": linux-x86_64
+arch:
+    value:
+        act_enabled: true
+        act_inference: false
+        dropout: 0
+        expansion: 4
+        forward_dtype: bfloat16
+        halt_exploration_prob: 0.1
+        halt_max_steps: 16
+        halt_state: z_H
+        hidden_size: 512
+        loss:
+            loss_type: stablemax_cross_entropy
+            name: losses@ACTLossHead
+        metric_eps_w: 0.5
+        name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
+        no_ACT_continue: true
+        num_heads: 8
+        outer_cycles: 3
+        patch_embed_type: metric
+        patch_size: 3
+        pos_encodings: rope
+        puzzle_emb_ndim: 0
+        readout_state: z_H
+        stages:
+            - '{''target'': ''z_L'', ''sources'': [''z_H''], ''include_inputs'': True, ''repeat'': 6}'
+            - '{''target'': ''z_H'', ''sources'': [''z_L''], ''repeat'': 3}'
+        states:
+            - '{''name'': ''z_H'', ''layers'': 1}'
+            - '{''name'': ''z_L'', ''layers'': 1, ''share_weights_with'': ''z_H''}'
+        warmup_cycles: 2
+beta1:
+    value: 0.9
+beta2:
+    value: 0.95
+checkpoint_every_eval:
+    value: true
+checkpoint_path:
+    value: checkpoints/Maze-30x30-hard-1k-ACT-torch/pretrain_loop_trm_maze30x30-25k-varc_loop_vit
+data_paths:
+    value:
+        - data/maze-30x30-hard-1k
+data_paths_test:
+    value: []
+early_stopping:
+    value: true
+early_stopping_min_delta:
+    value: 0
+early_stopping_mode:
+    value: max
+early_stopping_monitor:
+    value: exact_accuracy
+early_stopping_patience:
+    value: 5
+ema:
+    value: true
+ema_rate:
+    value: 0.999
+epochs:
+    value: 25000
+eval_interval:
+    value: 5000
+eval_save_outputs:
+    value: []
+evaluators:
+    value: []
+freeze_weights:
+    value: false
+global_batch_size:
+    value: 768
+grad_clip_norm:
+    value: 1
+load_checkpoint:
+    value: null
+lr:
+    value: 1e-05
+lr_min_ratio:
+    value: 1
+lr_warmup_steps:
+    value: 2000
+min_eval_interval:
+    value: 0
+muon_lr:
+    value: 0.002
+muon_momentum:
+    value: 0.95
+muon_nesterov:
+    value: true
+muon_ns_steps:
+    value: 5
+muon_weight_decay:
+    value: 0.01
+optimizer:
+    value: adam_atan2
+project_name:
+    value: Maze-30x30-hard-1k-ACT-torch
+puzzle_emb_lr:
+    value: 0.0001
+puzzle_emb_weight_decay:
+    value: 1
+run_name:
+    value: pretrain_loop_trm_maze30x30-25k-varc_loop_vit
+seed:
+    value: 0
+weight_decay:
+    value: 1

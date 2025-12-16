@@ -28,6 +28,9 @@ warmup_cycles: 0
 states:
   - name: z_H
     layers: 1
+  - name: z_M
+    layers: 1
+    share_weights_with: z_H
   - name: z_L
     layers: 1
     share_weights_with: z_H
@@ -37,9 +40,12 @@ stages:
     sources: [z_H]
     include_inputs: true
     repeat: 6
+  - target: z_M
+    sources: [z_L]
+    repeat: 3
   - target: z_H
     sources: [z_M]
-    repeat: 3
+    repeat: 1
 
 readout_state: z_H
 halt_state: z_H

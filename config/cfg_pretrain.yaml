@@ -30,7 +30,7 @@ beta1: 0.9
 beta2: 0.95
 weight_decay: 0.1
 puzzle_emb_weight_decay: 0.1
-grad_clip_norm: 1.0
+grad_clip_norm: 0.0  # Disabled to match TinyRecursiveModels behavior
 
 # Hyperparams - Puzzle embeddings training
 puzzle_emb_lr: 1e-2

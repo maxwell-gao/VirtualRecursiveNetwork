@@ -422,16 +422,12 @@ class LoopTransformerModel_ACT(nn.Module):
         return getattr(self.inner, "puzzle_emb", None)
 
     def initial_carry(self, batch: Dict[str, torch.Tensor]) -> LoopTransformerCarry:
+        # Match TinyRecursiveModels implementation exactly
         batch_size = batch["inputs"].shape[0]
-        device = batch["inputs"].device
         inner = self.inner.empty_carry(batch_size)
-        zeros = torch.zeros((batch_size,), dtype=torch.int32, device=device)
-        halted = torch.ones((batch_size,), dtype=torch.bool, device=device)
-
-        # Initialize inner states
-        inner = self.inner.reset_carry(halted, inner)
-
-        current_data = {k: v for k, v in batch.items()}
+        zeros = torch.zeros((batch_size,), dtype=torch.int32)
+        halted = torch.ones((batch_size,), dtype=torch.bool)
+        current_data = {k: torch.empty_like(v) for k, v in batch.items()}
         return LoopTransformerCarry(inner, zeros, halted, current_data)
 
     def forward(

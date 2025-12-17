@@ -93,8 +93,8 @@ def launch(hydra_config: DictConfig) -> None:
     - Single GPU: python pretrain_fabric.py
     - Multi-GPU via torchrun: torchrun --nproc-per-node 4 pretrain_fabric.py
     """
-    # Set matmul precision for better performance on Ampere+ GPUs
-    torch.set_float32_matmul_precision("high")
+    # Note: torch.set_float32_matmul_precision("high") removed for numerical stability
+    # It can cause NaN gradients in recursive architectures
 
     # Determine if launched via torchrun (sets LOCAL_RANK env var)
     is_torchrun = "LOCAL_RANK" in os.environ

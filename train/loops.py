@@ -2,7 +2,7 @@
 Training and evaluation loops.
 """
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict, Tuple
 import os
 
 import torch
@@ -14,6 +14,172 @@ from train.schedulers import compute_lr
 from puzzle_dataset import PuzzleDatasetMetadata
 from utils.dis import get_dis_target
 from models.losses import IGNORE_LABEL_ID
+
+
+def _train_dis_mask_method(
+    train_state: TrainState,
+    batch: Dict[str, torch.Tensor],
+    dis_max_steps: int,
+    dis_schedule: str,
+    vocab_size: int,
+    global_batch_size: int,
+) -> Dict[str, torch.Tensor]:
+    """Train using DIS with mask method."""
+    # Generate fixed noise for monotonic masking
+    B, L = batch["labels"].shape
+    mask_noise = torch.rand(B, L, device="cuda")
+
+    accumulated_metrics = {}
+
+    for step in range(dis_max_steps):
+        # Generate target
+        y_true = batch["labels"]
+        y_target = get_dis_target(
+            y_true,
+            step,
+            dis_max_steps,
+            vocab_size,
+            vocab_size - 1,  # mask_token_id is the last token
+            IGNORE_LABEL_ID,
+            dis_schedule,
+            noise=mask_noise,
+        )
+
+        # CRITICAL FIX: Protect input clues from being masked
+        if "inputs" in batch and batch["inputs"].shape == batch["labels"].shape:
+            is_clue = batch["inputs"] == batch["labels"]
+            y_target = torch.where(is_clue, y_true, y_target)
+
+        batch_step = batch.copy()
+        batch_step["labels"] = y_target
+
+        # Forward
+        step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
+        train_state.carry, loss, metrics, _, _ = train_state.model(
+            carry=train_state.carry,
+            batch=batch_step,
+            return_keys=[],
+            step=step_tensor,
+        )
+
+        # Accumulate metrics
+        for k, v in metrics.items():
+            if isinstance(v, torch.Tensor):
+                v = v.detach()
+            if k not in accumulated_metrics:
+                accumulated_metrics[k] = v
+            else:
+                accumulated_metrics[k] += v
+
+        # Backward (Accumulate gradients)
+        ((1 / (global_batch_size * dis_max_steps)) * loss).backward()
+
+    return {k: v / dis_max_steps for k, v in accumulated_metrics.items()}
+
+
+def _train_dis_loss_method(
+    train_state: TrainState,
+    batch: Dict[str, torch.Tensor],
+    dis_max_steps: int,
+    global_batch_size: int,
+) -> Dict[str, torch.Tensor]:
+    """Train using DIS with loss method (enforce improvement)."""
+    losses = []
+    accumulated_metrics = {}
+
+    for step in range(dis_max_steps):
+        batch_step = batch.copy()
+
+        # Forward
+        step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
+        train_state.carry, loss, metrics, _, _ = train_state.model(
+            carry=train_state.carry,
+            batch=batch_step,
+            return_keys=[],
+            step=step_tensor,
+        )
+
+        losses.append(loss)
+
+        # Accumulate metrics
+        for k, v in metrics.items():
+            if isinstance(v, torch.Tensor):
+                v = v.detach()
+            if k not in accumulated_metrics:
+                accumulated_metrics[k] = v
+            else:
+                accumulated_metrics[k] += v
+
+    # Compute total loss: L_final + sum(max(0, L_k - L_{k-1}.detach()))
+    total_loss = losses[-1]
+    for k in range(1, len(losses)):
+        improvement_penalty = torch.relu(losses[k] - losses[k - 1].detach())
+        total_loss = total_loss + improvement_penalty
+
+    # Backward
+    ((1 / global_batch_size) * total_loss).backward()
+
+    return {k: v / dis_max_steps for k, v in accumulated_metrics.items()}
+
+
+def _train_standard_act(
+    train_state: TrainState,
+    batch: Dict[str, torch.Tensor],
+    global_batch_size: int,
+) -> Dict[str, torch.Tensor]:
+    """Train using standard ACT method."""
+    # Init carry if needed
+    if train_state.carry is None:
+        with torch.device("cuda"):
+            train_state.carry = train_state.model.initial_carry(batch)
+
+    # Forward
+    train_state.carry, loss, metrics, _, _ = train_state.model(
+        carry=train_state.carry, batch=batch, return_keys=[]
+    )
+
+    # Backward
+    ((1 / global_batch_size) * loss).backward()
+
+    return metrics
+
+
+def _apply_optimizers(
+    config: PretrainConfig,
+    train_state: TrainState,
+    fabric: Fabric,
+) -> float:
+    """Apply optimizer step and return learning rate."""
+    lr_this_step = None
+
+    for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
+        if isinstance(base_lr, list):
+            for param_group, group_base_lr in zip(optim.param_groups, base_lr):
+                lr_this_step = compute_lr(group_base_lr, config, train_state)
+                param_group["lr"] = lr_this_step
+        else:
+            lr_this_step = compute_lr(base_lr, config, train_state)
+            for param_group in optim.param_groups:
+                param_group["lr"] = lr_this_step
+
+        if config.grad_clip_norm > 0.0:
+            fabric.clip_gradients(
+                train_state.model, optim, max_norm=config.grad_clip_norm
+            )
+
+        optim.step()
+        optim.zero_grad()
+
+    return lr_this_step
+
+
+def _allreduce_gradients(train_state: TrainState, fabric: Fabric) -> None:
+    """All-reduce gradients across ranks."""
+    if fabric.world_size > 1:
+        for param in train_state.model.parameters():
+            if param.grad is not None:
+                reduced_grad = fabric.all_reduce(param.grad, reduce_op="sum")
+                param.grad.data.copy_(reduced_grad)
 
 
 def train_batch(
@@ -52,194 +218,42 @@ def train_batch(
 
     dis_enabled = getattr(model_ref.config, "dis_enabled", False)
 
-    if dis_enabled:
-        # DIS Loop
-        dis_max_steps = model_ref.config.dis_max_steps
-        dis_schedule = model_ref.config.dis_schedule
-        dis_loss_method = getattr(model_ref.config, "dis_loss_method", "mask")
-        vocab_size = model_ref.config.vocab_size
+    # Zero grads before training
+    for optim in train_state.optimizers:
+        optim.zero_grad()
 
-        # Always init carry for DIS to start fresh
+    # Execute training method based on configuration
+    if dis_enabled:
+        # Initialize carry for DIS (always start fresh)
         with torch.device("cuda"):
             train_state.carry = train_state.model.initial_carry(batch)
 
-        metrics = {}
-        accumulated_metrics = {}
-
-        # Zero grads before the loop
-        for optim in train_state.optimizers:
-            optim.zero_grad()
-
+        # Choose DIS training method
+        dis_loss_method = getattr(model_ref.config, "dis_loss_method", "mask")
         if dis_loss_method == "mask":
-            # Generate fixed noise for monotonic masking
-            # B, L
-            B, L = batch["labels"].shape
-            mask_noise = torch.rand(B, L, device="cuda")
-
-            for step in range(dis_max_steps):
-                # Generate target
-                y_true = batch["labels"]
-                y_target = get_dis_target(
-                    y_true,
-                    step,
-                    dis_max_steps,
-                    vocab_size,
-                    vocab_size - 1,  # mask_token_id is the last token
-                    IGNORE_LABEL_ID,
-                    dis_schedule,
-                    noise=mask_noise,
-                )
-
-                # CRITICAL FIX: Protect input clues from being masked
-                # If input == label, it means the answer is already given in the input (e.g. Sudoku clues).
-                # We must NOT mask these, otherwise the model learns to ignore inputs.
-                # Note: batch["inputs"] and batch["labels"] must be aligned.
-                if "inputs" in batch and batch["inputs"].shape == batch["labels"].shape:
-                    is_clue = batch["inputs"] == batch["labels"]
-                    y_target = torch.where(is_clue, y_true, y_target)
-
-                batch_step = batch.copy()
-                batch_step["labels"] = y_target
-
-                # Forward
-                # Pass step as tensor to avoid recompilation if compiled
-                step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
-                train_state.carry, loss, metrics, _, _ = train_state.model(
-                    carry=train_state.carry,
-                    batch=batch_step,
-                    return_keys=[],
-                    step=step_tensor,
-                )
-
-                # Accumulate metrics
-                for k, v in metrics.items():
-                    if isinstance(v, torch.Tensor):
-                        v = v.detach()
-                        if torch.isnan(v).any():
-                            if fabric.global_rank == 0:
-                                print(f"WARNING: Metric {k} is NaN at step {step}")
-
-                    if k not in accumulated_metrics:
-                        accumulated_metrics[k] = v
-                    else:
-                        accumulated_metrics[k] += v
-
-                # Backward (Accumulate gradients)
-                # Normalize by dis_max_steps to keep gradient scale consistent
-                ((1 / (global_batch_size * dis_max_steps)) * loss).backward()
-
+            metrics = _train_dis_mask_method(
+                train_state,
+                batch,
+                model_ref.config.dis_max_steps,
+                model_ref.config.dis_schedule,
+                model_ref.config.vocab_size,
+                global_batch_size,
+            )
         else:
-            # Loss method: Target is always GT, enforce improvement
-            losses = []
-            for step in range(dis_max_steps):
-                # Target is always GT
-                batch_step = batch.copy()
-
-                # Forward
-                step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
-                train_state.carry, loss, metrics, _, _ = train_state.model(
-                    carry=train_state.carry,
-                    batch=batch_step,
-                    return_keys=[],
-                    step=step_tensor,
-                )
-
-                losses.append(loss)
-
-                # Accumulate metrics
-                for k, v in metrics.items():
-                    if isinstance(v, torch.Tensor):
-                        v = v.detach()
-                        if torch.isnan(v).any():
-                            if fabric.global_rank == 0:
-                                print(f"WARNING: Metric {k} is NaN at step {step}")
-
-                    if k not in accumulated_metrics:
-                        accumulated_metrics[k] = v
-                    else:
-                        accumulated_metrics[k] += v
-
-            # Compute total loss
-            # L_final + sum(max(0, L_k - L_{k-1}.detach()))
-            total_loss = losses[-1]
-            for k in range(1, len(losses)):
-                improvement_penalty = torch.relu(losses[k] - losses[k - 1].detach())
-                total_loss = total_loss + improvement_penalty
-
-            # Backward
-            ((1 / global_batch_size) * total_loss).backward()
-
-        # Allreduce once per batch
-        if fabric.world_size > 1:
-            for param in train_state.model.parameters():
-                if param.grad is not None:
-                    reduced_grad = fabric.all_reduce(param.grad, reduce_op="sum")
-                    param.grad.data.copy_(reduced_grad)
-
-        # Optimizer step once per batch
-        lr_this_step = None
-        for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
-            if isinstance(base_lr, list):
-                for param_group, group_base_lr in zip(optim.param_groups, base_lr):
-                    lr_this_step = compute_lr(group_base_lr, config, train_state)
-                    param_group["lr"] = lr_this_step
-            else:
-                lr_this_step = compute_lr(base_lr, config, train_state)
-                for param_group in optim.param_groups:
-                    param_group["lr"] = lr_this_step
-
-            if config.grad_clip_norm > 0.0:
-                fabric.clip_gradients(
-                    train_state.model, optim, max_norm=config.grad_clip_norm
-                )
-
-            optim.step()
-            optim.zero_grad()
-
-        # Use accumulated metrics for logging
-        metrics = {k: v / dis_max_steps for k, v in accumulated_metrics.items()}
-
+            metrics = _train_dis_loss_method(
+                train_state,
+                batch,
+                model_ref.config.dis_max_steps,
+                global_batch_size,
+            )
     else:
-        # Init carry if it is None
-        if train_state.carry is None:
-            with torch.device("cuda"):
-                train_state.carry = train_state.model.initial_carry(batch)  # type: ignore
+        metrics = _train_standard_act(train_state, batch, global_batch_size)
 
-        # Forward
-        train_state.carry, loss, metrics, _, _ = train_state.model(
-            carry=train_state.carry, batch=batch, return_keys=[]
-        )
+    # Synchronize gradients across ranks
+    _allreduce_gradients(train_state, fabric)
 
-        # Backward (same as original: scale then backward)
-        ((1 / global_batch_size) * loss).backward()
-
-        # Allreduce gradients (same as original)
-        if fabric.world_size > 1:
-            for param in train_state.model.parameters():
-                if param.grad is not None:
-                    # Fabric all_reduce is not in-place, unlike torch.distributed.all_reduce
-                    reduced_grad = fabric.all_reduce(param.grad, reduce_op="sum")
-                    param.grad.data.copy_(reduced_grad)
-
-        # Apply optimizer
-        lr_this_step = None
-        for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
-            if isinstance(base_lr, list):
-                for param_group, group_base_lr in zip(optim.param_groups, base_lr):
-                    lr_this_step = compute_lr(group_base_lr, config, train_state)
-                    param_group["lr"] = lr_this_step
-            else:
-                lr_this_step = compute_lr(base_lr, config, train_state)
-                for param_group in optim.param_groups:
-                    param_group["lr"] = lr_this_step
-
-            if config.grad_clip_norm > 0.0:
-                fabric.clip_gradients(
-                    train_state.model, optim, max_norm=config.grad_clip_norm
-                )
-
-            optim.step()
-            optim.zero_grad()
+    # Apply optimizer step
+    lr_this_step = _apply_optimizers(config, train_state, fabric)
 
     # Reduce metrics (use reduce to dst=0, not all_reduce)
     if len(metrics):

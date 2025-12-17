@@ -12,7 +12,7 @@ from train.config import PretrainConfig
 from train.state import TrainState
 from train.schedulers import compute_lr
 from puzzle_dataset import PuzzleDatasetMetadata
-from train.dis_utils import get_dis_target
+from utils.dis import get_dis_target
 from models.losses import IGNORE_LABEL_ID
 
 

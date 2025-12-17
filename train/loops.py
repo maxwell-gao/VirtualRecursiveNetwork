@@ -134,7 +134,7 @@ def train_batch(
             for step in range(dis_max_steps):
                 # Target is always GT
                 batch_step = batch.copy()
-                
+
                 # Forward
                 step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
                 train_state.carry, loss, metrics, _, _ = train_state.model(
@@ -143,7 +143,7 @@ def train_batch(
                     return_keys=[],
                     step=step_tensor,
                 )
-                
+
                 losses.append(loss)
 
                 # Accumulate metrics
@@ -158,14 +158,14 @@ def train_batch(
                         accumulated_metrics[k] = v
                     else:
                         accumulated_metrics[k] += v
-            
+
             # Compute total loss
             # L_final + sum(max(0, L_k - L_{k-1}.detach()))
             total_loss = losses[-1]
             for k in range(1, len(losses)):
-                improvement_penalty = torch.relu(losses[k] - losses[k-1].detach())
+                improvement_penalty = torch.relu(losses[k] - losses[k - 1].detach())
                 total_loss = total_loss + improvement_penalty
-            
+
             # Backward
             ((1 / global_batch_size) * total_loss).backward()
 

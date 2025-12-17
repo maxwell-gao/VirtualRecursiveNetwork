@@ -27,17 +27,17 @@ def main():
         default=None,
         help="Limit number of runs (optional)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Initialize sweep
     cmd = ["wandb", "sweep", args.config]
     if args.count:
         cmd.extend(["--count", str(args.count)])
-    
+
     print(f"Executing command: {' '.join(cmd)}")
     result = subprocess.run(cmd, check=True)
-    
+
     if result.returncode == 0:
         print("\nSweep created successfully!")
         print("Use the following command to start an agent:")
@@ -51,4 +51,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

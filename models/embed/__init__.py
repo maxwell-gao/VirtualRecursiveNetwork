@@ -22,4 +22,3 @@ __all__ = [
     "MetricPatchEmbed",
     "create_patch_embed",
 ]
-

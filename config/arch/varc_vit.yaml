@@ -26,7 +26,7 @@ forward_dtype: bfloat16
 dropout: 0.0
 
 outer_cycles: 6
-warmup_cycles: 0
+no_grad_cycles: 0
 
 # Simple sequential architecture (like standard ViT)
 states:

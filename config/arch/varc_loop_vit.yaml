@@ -27,7 +27,7 @@ forward_dtype: bfloat16
 dropout: 0.0
 
 outer_cycles: 3
-warmup_cycles: 2
+no_grad_cycles: 2
 
 # Hierarchical loop architecture (same as loop_transformer)
 states:

@@ -8,7 +8,7 @@ loss:
 # Patch embedding mode - Metric Convolutions
 patch_embed_type: metric
 patch_size: 3
-metric_eps_w: 0.5  # 0.5 = asymmetric, 1.0 = pure Riemannian
+metric_eps_w: 0.5 # 0.5 = asymmetric, 1.0 = pure Riemannian
 
 # ACT config
 halt_exploration_prob: 0.0
@@ -27,7 +27,7 @@ forward_dtype: bfloat16
 dropout: 0.0
 
 outer_cycles: 1
-warmup_cycles: 0
+no_grad_cycles: 0
 
 # Sequential ViT architecture
 states:

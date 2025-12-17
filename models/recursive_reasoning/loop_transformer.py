@@ -83,7 +83,7 @@ class LoopTransformerConfig(BaseModel):
     dis_loss_method: str = "mask"
 
     outer_cycles: int
-    warmup_cycles: Optional[int] = None
+    no_grad_cycles: Optional[int] = None
 
     states: List[LoopStateConfig]
     stages: List[LoopStageConfig]
@@ -372,20 +372,20 @@ class LoopTransformerInner(nn.Module):
         states = {name: tensor for name, tensor in carry.states.items()}
 
         if self.config.dis_enabled:
-            warmup_cycles = 0
+            no_grad_cycles = 0
             grad_cycles = self.config.outer_cycles
         else:
-            warmup_cycles = (
+            no_grad_cycles = (
                 self.config.outer_cycles - 1
-                if self.config.warmup_cycles is None
-                else self.config.warmup_cycles
+                if self.config.no_grad_cycles is None
+                else self.config.no_grad_cycles
             )
-            warmup_cycles = max(0, min(warmup_cycles, self.config.outer_cycles - 1))
-            grad_cycles = max(1, self.config.outer_cycles - warmup_cycles)
+            no_grad_cycles = max(0, min(no_grad_cycles, self.config.outer_cycles - 1))
+            grad_cycles = max(1, self.config.outer_cycles - no_grad_cycles)
 
-        if warmup_cycles > 0:
+        if no_grad_cycles > 0:
             with torch.no_grad():
-                for _ in range(warmup_cycles):
+                for _ in range(no_grad_cycles):
                     self._run_schedule(states, input_embeddings, seq_info)
 
         with nullcontext():

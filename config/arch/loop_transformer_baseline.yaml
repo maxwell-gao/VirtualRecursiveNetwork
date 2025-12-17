@@ -26,7 +26,7 @@ dropout: 0.0
 
 # Fixed number of cycles (no adaptive computation)
 outer_cycles: 3
-warmup_cycles: 0
+no_grad_cycles: 0
 
 states:
   - name: z_H

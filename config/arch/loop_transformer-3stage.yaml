@@ -39,11 +39,11 @@ stages:
   - target: z_L
     sources: [z_H]
     include_inputs: true
-    repeat: 6
+    repeat: 3
   - target: z_M
     sources: [z_L]
     include_inputs: true
-    repeat: 3
+    repeat: 2
   - target: z_H
     sources: [z_M]
     repeat: 1

@@ -1,6 +1,6 @@
 # VARCLoopViT - Loop Transformer with MetricConvolutions
 
-name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
+name: looper@LoopTransformer
 loss:
   name: losses@ACTLossHead
   loss_type: stablemax_cross_entropy
@@ -29,7 +29,7 @@ dropout: 0.0
 outer_cycles: 3
 no_grad_cycles: 2
 
-# Hierarchical loop architecture (same as loop_transformer)
+# Hierarchical loop architecture (using looper module)
 states:
   - name: z_H
     layers: 1

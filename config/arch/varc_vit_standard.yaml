@@ -1,6 +1,6 @@
 # VARCViT Standard - ViT baseline using LoopTransformer
 
-name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
+name: looper@LoopTransformer
 loss:
   name: losses@ACTLossHead
   loss_type: stablemax_cross_entropy

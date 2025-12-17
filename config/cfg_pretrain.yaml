@@ -1,7 +1,7 @@
 # ARC training config
 
 defaults:
-  - arch: loop_transformer
+  - arch: loop_transformer  # Note: YAML file names unchanged, use "loop_transformer" to load looper
   - _self_
 
 hydra:

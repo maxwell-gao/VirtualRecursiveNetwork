@@ -1,4 +1,4 @@
-name: recursive_reasoning.loop_transformer@LoopTransformerModel_ACT
+name: looper@LoopTransformer
 loss:
   name: losses@CrossEntropyLossHead
   loss_type: stablemax_cross_entropy

@@ -162,7 +162,7 @@ run_name=${run_name} ema=True
 ```bash
 torchrun --nproc-per-node 8 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
 arch=loop_transformer \
-data_paths='[data/sudoku-extreme-1k-aug-1000]' evaluators='[]' \
+data_paths="[data/sudoku-extreme-1k-aug-1000]" evaluators="[]" \
 epochs=50000 eval_interval=5000 \
 +optimizer=muon \
 lr=0.0003 weight_decay=1.0 \

@@ -26,6 +26,7 @@ def _train_dis(
     global_batch_size: int,
     config: "PretrainConfig",
     fabric: "Fabric",
+    dis_step_weighting: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """
     Train using Deep Improvement Supervision (DIS).
@@ -34,6 +35,8 @@ def _train_dis(
         dis_loss_method: "mask" (paper default) or "loss" (improvement penalty variant)
             - "mask": Generate masked targets, optimize after EACH step (paper Figure 3)
             - "loss": Use GT targets, accumulate improvement penalty, single optimization
+        dis_step_weighting: If True, apply linearly increasing weights to loss at each step.
+            This emphasizes late-step fidelity (closer to GT) over early-step (noisy targets).
     """
     use_mask_method = dis_loss_method == "mask"
     
@@ -89,7 +92,14 @@ def _train_dis(
         # Method-specific optimization
         if use_mask_method:
             # Paper-style: optimize after EACH step
-            ((1 / global_batch_size) * loss).backward()
+            if dis_step_weighting:
+                # Apply linearly increasing step weights (emphasize late-step fidelity)
+                step_weight = (step + 1) / dis_max_steps
+                scaled_loss = loss * step_weight
+            else:
+                scaled_loss = loss
+            
+            ((1 / global_batch_size) * scaled_loss).backward()
             _allreduce_gradients(train_state, fabric)
             _apply_optimizers(config, train_state, fabric)
         else:
@@ -247,6 +257,7 @@ def train_batch(
             global_batch_size=global_batch_size,
             config=config,
             fabric=fabric,
+            dis_step_weighting=getattr(model_ref.config, "dis_step_weighting", False),
         )
         # DIS already handled optimizer steps internally
         lr_this_step = train_state.optimizer_lrs[0]

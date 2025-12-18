@@ -14,6 +14,7 @@ dis_enabled: true
 dis_max_steps: 16
 dis_schedule: linear
 dis_loss_method: loss
+dis_step_weighting: false
 
 hidden_size: 512
 num_heads: 8

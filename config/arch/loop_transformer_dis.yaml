@@ -15,6 +15,7 @@ dis_enabled: true
 dis_max_steps: 6         # 论文值: Nsup=6
 dis_schedule: linear     # 线性递减 mask 率
 dis_loss_method: mask
+dis_step_weighting: true
 
 gradient_checkpointing: false  # 论文 T=1 不需要
 

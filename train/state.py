@@ -46,7 +46,11 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig) -> None:
         state_dict = torch.load(config.load_checkpoint, map_location="cuda")
 
         # Resize and reset puzzle emb if needed
-        puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
+        # Old checkpoints might use "inner", new ones use "core"
+        puzzle_emb_name = "_orig_mod.model.core.puzzle_emb.weights"
+        if puzzle_emb_name not in state_dict and "_orig_mod.model.inner.puzzle_emb.weights" in state_dict:
+             puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
+
         expected_shape: torch.Size = model.model.puzzle_emb.weights.shape  # type: ignore
         if puzzle_emb_name in state_dict:
             puzzle_emb = state_dict[puzzle_emb_name]
@@ -83,8 +87,8 @@ def save_train_state(config: PretrainConfig, train_state: TrainState) -> None:
 
 
 def get_muon_param_groups(model: nn.Module, config: PretrainConfig):
-    # model is ACTLossHead -> model.model -> model.model.inner
-    inner = model.model.inner
+    # model is ACTLossHead -> model.model -> model.model.core (was inner)
+    inner = model.model.core
 
     embed_params = set()
     head_params = set()

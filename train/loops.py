@@ -88,7 +88,17 @@ def _train_dis_mask_method(
         # Optimizer step (following paper Figure 3)
         _apply_optimizers(config, train_state, fabric)
 
-    return {k: v / dis_max_steps for k, v in accumulated_metrics.items()}
+    # Return averaged metrics, ensuring they are scalar tensors for torch.stack
+    result = {}
+    for k, v in accumulated_metrics.items():
+        avg = v / dis_max_steps
+        # Ensure scalar tensor on CUDA
+        if not isinstance(avg, torch.Tensor):
+            avg = torch.tensor(avg, device="cuda", dtype=torch.float32)
+        elif avg.dim() > 0:
+            avg = avg.sum()  # Reduce to scalar if needed
+        result[k] = avg
+    return result
 
 
 def _train_dis_loss_method(
@@ -143,7 +153,17 @@ def _train_dis_loss_method(
     _allreduce_gradients(train_state, fabric)
     _apply_optimizers(config, train_state, fabric)
 
-    return {k: v / dis_max_steps for k, v in accumulated_metrics.items()}
+    # Return averaged metrics, ensuring they are scalar tensors for torch.stack
+    result = {}
+    for k, v in accumulated_metrics.items():
+        avg = v / dis_max_steps
+        # Ensure scalar tensor on CUDA
+        if not isinstance(avg, torch.Tensor):
+            avg = torch.tensor(avg, device="cuda", dtype=torch.float32)
+        elif avg.dim() > 0:
+            avg = avg.sum()  # Reduce to scalar if needed
+        result[k] = avg
+    return result
 
 
 def _train_standard_act(

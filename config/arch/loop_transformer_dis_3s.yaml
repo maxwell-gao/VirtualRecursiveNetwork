@@ -1,7 +1,8 @@
 name: looper@LoopTransformer
 loss:
   name: losses@CrossEntropyLossHead
-  mask_penalty_weight: 0.5
+  loss_type: softmax_cross_entropy
+  mask_penalty_weight: 0.0
 
 halt_exploration_prob: 0.0
 halt_max_steps: ${.dis_max_steps}
@@ -9,9 +10,13 @@ act_enabled: false
 act_inference: false
 no_ACT_continue: true
 
+# DIS Configuration (paper settings)
 dis_enabled: true
-dis_max_steps: 16
+dis_max_steps: 6
 dis_schedule: linear
+dis_loss_method: mask
+
+gradient_checkpointing: false
 
 hidden_size: 512
 num_heads: 8
@@ -24,8 +29,9 @@ pos_encodings: rope
 forward_dtype: bfloat16
 dropout: 0.0
 
-outer_cycles: 3
-no_grad_cycles: 2
+# Loop Configuration (paper: T=1)
+outer_cycles: 1
+no_grad_cycles: 0
 
 states:
   - name: z_H

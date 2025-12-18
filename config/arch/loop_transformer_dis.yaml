@@ -1,7 +1,8 @@
 name: looper@LoopTransformer
 loss:
   name: losses@CrossEntropyLossHead
-  mask_penalty_weight: 0.5
+  loss_type: softmax_cross_entropy
+  mask_penalty_weight: 0.0  # 论文不使用 mask penalty
 
 halt_exploration_prob: 0.0
 halt_max_steps: ${.dis_max_steps}
@@ -9,10 +10,13 @@ act_enabled: false
 act_inference: false
 no_ACT_continue: true
 
+# DIS Configuration (following paper settings)
 dis_enabled: true
-dis_max_steps: 16
-dis_schedule: linear
-dis_loss_method: mask # mask or loss
+dis_max_steps: 6         # 论文值: Nsup=6
+dis_schedule: linear     # 线性递减 mask 率
+dis_loss_method: mask
+
+gradient_checkpointing: false  # 论文 T=1 不需要
 
 hidden_size: 512
 num_heads: 8
@@ -25,9 +29,15 @@ pos_encodings: rope
 forward_dtype: bfloat16
 dropout: 0.0
 
-outer_cycles: 2
-no_grad_cycles: 2
+# Loop Configuration (paper: T=1, n=2)
+# Total forward passes per step: T*(n+1) = 1*3 = 3
+# Total with gradients: Nsup * 3 = 6 * 3 = 18
+outer_cycles: 1    # 论文 T=1
+no_grad_cycles: 0  # DIS 模式所有 cycles 都有梯度
 
+# State Configuration (paper uses single z state)
+# Paper n=2 means: 2 updates of z_L, then 1 update of z_H
+# Simplified to single z with repeat=2 (internal updates)
 states:
   - name: z
     layers: 1
@@ -35,7 +45,7 @@ states:
 stages:
   - target: z
     include_inputs: true
-    repeat: 2
+    repeat: 2  # n=2 internal updates
 
 readout_state: z
 halt_state: z

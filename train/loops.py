@@ -110,10 +110,22 @@ def _train_dis(
 
     # Return averaged metrics
     result = {}
+    if not accumulated_metrics:
+        print(f"WARNING: accumulated_metrics is empty! dis_max_steps={dis_max_steps}")
+    
     for k, v in accumulated_metrics.items():
         avg = v / dis_max_steps
         if avg.dim() > 0:
             avg = avg.sum()
+            
+        # Check for NaN
+        if torch.isnan(avg).any():
+            if fabric.global_rank == 0:
+                print(f"WARNING: Metric {k} is NaN in _train_dis result!")
+            # Replace NaN with 0.0 to ensure wandb continues logging
+            # This helps distinguish between "no log" and "nan log"
+            avg = torch.nan_to_num(avg, nan=0.0)
+            
         result[k] = avg.to(device="cuda", dtype=torch.float32)
     return result
 
@@ -271,8 +283,15 @@ def train_batch(
 
             # Postprocess
             count = max(reduced_metrics["count"], 1)  # Avoid NaNs
+            
+            # Determine if loss is already Mean (CrossEntropyLossHead) or Sum (ACTLossHead)
+            # DIS uses CrossEntropyLossHead which returns Mean.
+            # Standard ACT uses ACTLossHead which returns Sum.
+            # If Mean, do NOT divide by global_batch_size again.
+            is_mean_loss = dis_enabled
+            
             reduced_metrics = {
-                f"train/{k}": v / (global_batch_size if k.endswith("loss") else count)
+                f"train/{k}": v / (global_batch_size if (k.endswith("loss") and not is_mean_loss) else count)
                 for k, v in reduced_metrics.items()
             }
 

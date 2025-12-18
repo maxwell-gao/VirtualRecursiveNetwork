@@ -83,7 +83,9 @@ class LoopTransformerCore(nn.Module):
                 cast_to=self.forward_dtype,
             )
         else:
-            raise NotImplementedError(f"Position encoding {config.pos_encodings} not supported")
+            raise NotImplementedError(
+                f"Position encoding {config.pos_encodings} not supported"
+            )
 
         # State modules
         self.state_names = [state.name for state in config.states]
@@ -335,4 +337,3 @@ class LoopTransformerCore(nn.Module):
                 q_continue_logits.squeeze(-1),
             ),
         )
-

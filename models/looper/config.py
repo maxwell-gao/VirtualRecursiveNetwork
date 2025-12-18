@@ -91,4 +91,3 @@ class LoopTransformerConfig(BaseModel):
 
     # Training options
     gradient_checkpointing: bool = False
-

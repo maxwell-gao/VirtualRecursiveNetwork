@@ -115,7 +115,9 @@ class LoopTransformerBlock(nn.Module):
         # preventing numerical explosion across multiple cycles.
         hidden_states = rms_norm(
             hidden_states
-            + self.dropout(self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states)),
+            + self.dropout(
+                self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states)
+            ),
             variance_epsilon=self.norm_eps,
         )
         hidden_states = rms_norm(

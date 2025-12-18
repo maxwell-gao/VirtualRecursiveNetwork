@@ -38,7 +38,9 @@ class TransformerBlock(nn.Module):
         """
         hidden_states = rms_norm(
             hidden_states
-            + self.dropout(self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states)),
+            + self.dropout(
+                self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states)
+            ),
             variance_epsilon=self.norm_eps,
         )
         hidden_states = rms_norm(
@@ -76,4 +78,3 @@ class ReasoningModule(nn.Module):
             hidden_states = layer(hidden_states=hidden_states, **kwargs)
 
         return hidden_states
-

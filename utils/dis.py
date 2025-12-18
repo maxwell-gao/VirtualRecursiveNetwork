@@ -89,4 +89,3 @@ def get_dis_target(
     y_target[mask] = mask_token_id
 
     return y_target
-

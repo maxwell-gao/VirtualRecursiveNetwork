@@ -80,11 +80,11 @@ class LoopTransformer(nn.Module):
             )
 
         # ACT mode: adaptive halting logic
-        
+
         # Reset core carry for halted sequences
         core_carry = self.core.reset_carry(carry.halted, carry.core_carry)
         new_steps = torch.where(carry.halted, 0, carry.steps)
-        
+
         # Update current data for halted sequences
         new_current_data = {
             k: torch.where(carry.halted.view((-1,) + (1,) * (v.ndim - 1)), batch[k], v)
@@ -154,4 +154,3 @@ class LoopTransformer(nn.Module):
             halted,
             new_current_data,
         ), outputs
-

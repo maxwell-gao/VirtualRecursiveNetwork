@@ -16,49 +16,57 @@ from utils.dis import get_dis_target
 from models.losses import IGNORE_LABEL_ID
 
 
-def _train_dis_mask_method(
+def _train_dis(
     train_state: TrainState,
     batch: Dict[str, torch.Tensor],
     dis_max_steps: int,
     dis_schedule: str,
+    dis_loss_method: str,
     vocab_size: int,
     global_batch_size: int,
     config: "PretrainConfig",
     fabric: "Fabric",
 ) -> Dict[str, torch.Tensor]:
     """
-    Train using DIS with mask method.
+    Train using Deep Improvement Supervision (DIS).
     
-    Following the paper (Figure 3), we optimize after EACH step,
-    not accumulate gradients across all steps.
+    Args:
+        dis_loss_method: "mask" (paper default) or "loss" (improvement penalty variant)
+            - "mask": Generate masked targets, optimize after EACH step (paper Figure 3)
+            - "loss": Use GT targets, accumulate improvement penalty, single optimization
     """
-    # Generate fixed noise for monotonic masking
-    B, L = batch["labels"].shape
-    mask_noise = torch.rand(B, L, device="cuda")
+    use_mask_method = dis_loss_method == "mask"
+    
+    # For mask method: generate fixed noise for monotonic masking
+    mask_noise = None
+    if use_mask_method:
+        B, L = batch["labels"].shape
+        mask_noise = torch.rand(B, L, device="cuda")
 
     accumulated_metrics = {}
+    losses = []  # Only used for loss method
 
     for step in range(dis_max_steps):
-        # Generate target with decreasing mask rate
-        y_true = batch["labels"]
-        y_target = get_dis_target(
-            y_true,
-            step,
-            dis_max_steps,
-            vocab_size,
-            vocab_size - 1,  # mask_token_id is the last token
-            IGNORE_LABEL_ID,
-            dis_schedule,
-            noise=mask_noise,
-        )
-
-        # Protect input clues from being masked
-        if "inputs" in batch and batch["inputs"].shape == batch["labels"].shape:
-            is_clue = batch["inputs"] == batch["labels"]
-            y_target = torch.where(is_clue, y_true, y_target)
-
         batch_step = batch.copy()
-        batch_step["labels"] = y_target
+        
+        # Generate target based on method
+        if use_mask_method:
+            y_true = batch["labels"]
+            y_target = get_dis_target(
+                y_true,
+                step,
+                dis_max_steps,
+                vocab_size,
+                vocab_size - 1,  # mask_token_id is the last token
+                IGNORE_LABEL_ID,
+                dis_schedule,
+                noise=mask_noise,
+            )
+            # Protect input clues from being masked
+            if "inputs" in batch and batch["inputs"].shape == batch["labels"].shape:
+                is_clue = batch["inputs"] == batch["labels"]
+                y_target = torch.where(is_clue, y_true, y_target)
+            batch_step["labels"] = y_target
 
         # Forward
         step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
@@ -69,100 +77,44 @@ def _train_dis_mask_method(
             step=step_tensor,
         )
 
-        # Accumulate metrics for logging
+        # Accumulate metrics (clone to avoid in-place issues)
         for k, v in metrics.items():
             if isinstance(v, torch.Tensor):
-                v = v.detach()
+                v = v.detach().clone().float()
             if k not in accumulated_metrics:
                 accumulated_metrics[k] = v
             else:
-                accumulated_metrics[k] += v
+                accumulated_metrics[k] = accumulated_metrics[k] + v
 
-        # === Paper-style: optimize after EACH step ===
-        # Scale loss by batch size only (not by dis_max_steps)
-        ((1 / global_batch_size) * loss).backward()
+        # Method-specific optimization
+        if use_mask_method:
+            # Paper-style: optimize after EACH step
+            ((1 / global_batch_size) * loss).backward()
+            _allreduce_gradients(train_state, fabric)
+            _apply_optimizers(config, train_state, fabric)
+        else:
+            # Loss method: collect losses for later
+            losses.append(loss)
+
+    # Loss method: single optimization at the end
+    if not use_mask_method:
+        # Compute total loss: L_final + sum(max(0, L_k - L_{k-1}.detach()))
+        total_loss = losses[-1]
+        for k in range(1, len(losses)):
+            improvement_penalty = torch.relu(losses[k] - losses[k - 1].detach())
+            total_loss = total_loss + improvement_penalty
         
-        # Allreduce gradients
+        ((1 / global_batch_size) * total_loss).backward()
         _allreduce_gradients(train_state, fabric)
-        
-        # Optimizer step (following paper Figure 3)
         _apply_optimizers(config, train_state, fabric)
 
-    # Return averaged metrics, ensuring they are scalar tensors for torch.stack
+    # Return averaged metrics
     result = {}
     for k, v in accumulated_metrics.items():
         avg = v / dis_max_steps
-        # Ensure scalar tensor on CUDA
-        if not isinstance(avg, torch.Tensor):
-            avg = torch.tensor(avg, device="cuda", dtype=torch.float32)
-        elif avg.dim() > 0:
-            avg = avg.sum()  # Reduce to scalar if needed
-        result[k] = avg
-    return result
-
-
-def _train_dis_loss_method(
-    train_state: TrainState,
-    batch: Dict[str, torch.Tensor],
-    dis_max_steps: int,
-    global_batch_size: int,
-    config: "PretrainConfig",
-    fabric: "Fabric",
-) -> Dict[str, torch.Tensor]:
-    """
-    Train using DIS with loss method (enforce improvement).
-    
-    This is a variant that uses improvement penalty instead of masked targets.
-    Unlike mask method, this requires all steps' losses before computing the final loss,
-    so we use single optimizer step at the end (not per-step).
-    """
-    losses = []
-    accumulated_metrics = {}
-
-    for step in range(dis_max_steps):
-        batch_step = batch.copy()
-
-        # Forward
-        step_tensor = torch.tensor(step, device="cuda", dtype=torch.long)
-        train_state.carry, loss, metrics, _, _ = train_state.model(
-            carry=train_state.carry,
-            batch=batch_step,
-            return_keys=[],
-            step=step_tensor,
-        )
-
-        losses.append(loss)
-
-        # Accumulate metrics
-        for k, v in metrics.items():
-            if isinstance(v, torch.Tensor):
-                v = v.detach()
-            if k not in accumulated_metrics:
-                accumulated_metrics[k] = v
-            else:
-                accumulated_metrics[k] += v
-
-    # Compute total loss: L_final + sum(max(0, L_k - L_{k-1}.detach()))
-    total_loss = losses[-1]
-    for k in range(1, len(losses)):
-        improvement_penalty = torch.relu(losses[k] - losses[k - 1].detach())
-        total_loss = total_loss + improvement_penalty
-
-    # Backward and optimize (single step for loss method)
-    ((1 / global_batch_size) * total_loss).backward()
-    _allreduce_gradients(train_state, fabric)
-    _apply_optimizers(config, train_state, fabric)
-
-    # Return averaged metrics, ensuring they are scalar tensors for torch.stack
-    result = {}
-    for k, v in accumulated_metrics.items():
-        avg = v / dis_max_steps
-        # Ensure scalar tensor on CUDA
-        if not isinstance(avg, torch.Tensor):
-            avg = torch.tensor(avg, device="cuda", dtype=torch.float32)
-        elif avg.dim() > 0:
-            avg = avg.sum()  # Reduce to scalar if needed
-        result[k] = avg
+        if avg.dim() > 0:
+            avg = avg.sum()
+        result[k] = avg.to(device="cuda", dtype=torch.float32)
     return result
 
 
@@ -272,29 +224,18 @@ def train_batch(
         with torch.device("cuda"):
             train_state.carry = train_state.model.initial_carry(batch)
 
-        # Choose DIS training method
-        # Note: DIS methods handle optimizer steps internally (per-step optimization)
-        dis_loss_method = getattr(model_ref.config, "dis_loss_method", "mask")
-        if dis_loss_method == "mask":
-            metrics = _train_dis_mask_method(
-                train_state,
-                batch,
-                model_ref.config.dis_max_steps,
-                model_ref.config.dis_schedule,
-                model_ref.config.vocab_size,
-                global_batch_size,
-                config,
-                fabric,
-            )
-        else:
-            metrics = _train_dis_loss_method(
-                train_state,
-                batch,
-                model_ref.config.dis_max_steps,
-                global_batch_size,
-                config,
-                fabric,
-            )
+        # DIS training (handles optimizer steps internally)
+        metrics = _train_dis(
+            train_state,
+            batch,
+            dis_max_steps=model_ref.config.dis_max_steps,
+            dis_schedule=model_ref.config.dis_schedule,
+            dis_loss_method=getattr(model_ref.config, "dis_loss_method", "mask"),
+            vocab_size=model_ref.config.vocab_size,
+            global_batch_size=global_batch_size,
+            config=config,
+            fabric=fabric,
+        )
         # DIS already handled optimizer steps internally
         lr_this_step = train_state.optimizer_lrs[0]
         if isinstance(lr_this_step, list):

@@ -45,12 +45,20 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig) -> None:
         # Load state dict
         state_dict = torch.load(config.load_checkpoint, map_location="cuda")
 
-        # Resize and reset puzzle emb if needed
-        # Old checkpoints might use "inner", new ones use "core"
-        puzzle_emb_name = "_orig_mod.model.core.puzzle_emb.weights"
-        if puzzle_emb_name not in state_dict and "_orig_mod.model.inner.puzzle_emb.weights" in state_dict:
-             puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
+        # Rename 'inner' to 'core' for backward compatibility with old checkpoints
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            if ".inner." in k:
+                new_k = k.replace(".inner.", ".core.")
+                new_state_dict[new_k] = v
+            else:
+                new_state_dict[k] = v
+        state_dict = new_state_dict
 
+        # Resize and reset puzzle emb if needed
+        puzzle_emb_name = "_orig_mod.model.core.puzzle_emb.weights"
+        # Since we renamed keys, we only need to check the new name
+        
         expected_shape: torch.Size = model.model.puzzle_emb.weights.shape  # type: ignore
         if puzzle_emb_name in state_dict:
             puzzle_emb = state_dict[puzzle_emb_name]
@@ -87,8 +95,14 @@ def save_train_state(config: PretrainConfig, train_state: TrainState) -> None:
 
 
 def get_muon_param_groups(model: nn.Module, config: PretrainConfig):
-    # model is ACTLossHead -> model.model -> model.model.core (was inner)
-    inner = model.model.core
+    # Adaptive: check for 'core' (new Looper) or 'inner' (old TRM/HRM)
+    if hasattr(model.model, "core"):
+        inner = model.model.core
+    elif hasattr(model.model, "inner"):
+        inner = model.model.inner
+    else:
+        # Fallback or raise error
+        raise AttributeError(f"Model {type(model.model).__name__} has neither 'core' nor 'inner' attribute.")
 
     embed_params = set()
     head_params = set()

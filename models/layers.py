@@ -261,10 +261,18 @@ class MetricSwiGLU(nn.Module):
     """
     SwiGLU with 2D Metric-based Deformable Convolution.
     Adapts the local mixing kernel based on the input features using Finsler-Randers metric.
-    Assumes the input sequence represents a square grid.
+    
+    The grid portion of the sequence (after puzzle_emb_len tokens) must be a perfect square.
+    Puzzle embedding tokens are processed with standard SwiGLU (no conv).
     """
 
-    def __init__(self, hidden_size: int, expansion: float, kernel_size: int = 3):
+    def __init__(
+        self,
+        hidden_size: int,
+        expansion: float,
+        kernel_size: int = 3,
+        puzzle_emb_len: int = 0,
+    ):
         super().__init__()
         if not HAS_TORCHVISION:
             raise ImportError(
@@ -275,6 +283,7 @@ class MetricSwiGLU(nn.Module):
         self.inter = inter
         self.kernel_size = kernel_size
         self.pad = kernel_size // 2
+        self.puzzle_emb_len = puzzle_emb_len
 
         self.gate_up_proj = CastedLinear(hidden_size, inter * 2, bias=False)
         
@@ -284,9 +293,10 @@ class MetricSwiGLU(nn.Module):
         
         # Depthwise convolution weight
         self.conv_weight = nn.Parameter(
-            torch.randn(inter, 1, kernel_size, kernel_size) / kernel_size
+            torch.randn(inter, 1, kernel_size, kernel_size, dtype=torch.bfloat16)
+            / kernel_size
         )
-        self.conv_bias = nn.Parameter(torch.zeros(inter))
+        self.conv_bias = nn.Parameter(torch.zeros(inter, dtype=torch.bfloat16))
         
         self.down_proj = CastedLinear(inter, hidden_size, bias=False)
 
@@ -298,44 +308,49 @@ class MetricSwiGLU(nn.Module):
         gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
         x_ffn = F.silu(gate) * up  # [B, L, inter]
         
-        # Try to infer square grid size
-        S = int(math.sqrt(L))
-        if S * S != L:
-            # If not square, fallback to identity or simple behavior?
-            # Or raise error if we expect grid data.
-            # For robustness, let's treat it as linear if we can't square it,
-            # BUT deform_conv2d requires 2D. 
-            # So we effectively require square grids here.
-            # If there's a puzzle_emb_len, it might mess this up if included in L.
-            # URM separates puzzle_emb logic usually, but here 'x' is hidden states 
-            # which usually includes everything.
-            # If L is not square, we'll try to pad to square or fail.
-            # Let's assume for now L is square as is common in ARC models without puzzle embeddings in the main sequence,
-            # OR the sequence INCLUDES padding to be square.
-            # If it fails, the user will know to fix config.
-            raise ValueError(f"MetricSwiGLU requires square sequence length (L={L} is not square)")
+        # Split puzzle embedding tokens from grid tokens
+        if self.puzzle_emb_len > 0:
+            prefix_ffn = x_ffn[:, : self.puzzle_emb_len]  # [B, puzzle_emb_len, inter]
+            grid_ffn = x_ffn[:, self.puzzle_emb_len :]  # [B, L - puzzle_emb_len, inter]
+            grid_len = L - self.puzzle_emb_len
+        else:
+            prefix_ffn = None
+            grid_ffn = x_ffn
+            grid_len = L
+        
+        # Check if grid is square
+        S = int(math.sqrt(grid_len))
+        if S * S != grid_len:
+            raise ValueError(
+                f"MetricSwiGLU requires square grid length. "
+                f"Got L={L}, puzzle_emb_len={self.puzzle_emb_len}, grid_len={grid_len} "
+                f"(√{grid_len} ≈ {math.sqrt(grid_len):.2f})"
+            )
 
         # [B, inter, H, W]
         x_2d = x_ffn.transpose(1, 2).reshape(B, self.inter, S, S)
         
         # Compute metric offsets
-        # metric_net expects [B, C, H, W]
-        offsets = get_metric_offsets(
-            x_2d, self.metric_net, self.kernel_size
-        )
+        offsets = get_metric_offsets(x_2d, self.metric_net, self.kernel_size)
         
         # Apply Deformable Convolution
         out_2d = torchvision.ops.deform_conv2d(
             input=x_2d,
             offset=offsets,
-            weight=self.conv_weight.to(x_2d.dtype),
-            bias=self.conv_bias.to(x_2d.dtype),
+            weight=self.conv_weight,
+            bias=self.conv_bias,
             padding=self.pad,
-            groups=self.inter
+            groups=self.inter,
         )
         
         # Flatten back
-        out = out_2d.reshape(B, self.inter, L).transpose(1, 2)
+        grid_out = out_2d.reshape(B, self.inter, grid_len).transpose(1, 2)
+        
+        # Concatenate prefix back if present
+        if prefix_ffn is not None:
+            out = torch.cat([prefix_ffn, grid_out], dim=1)
+        else:
+            out = grid_out
         
         return self.down_proj(out)
 

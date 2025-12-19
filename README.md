@@ -125,6 +125,36 @@ run_name=${run_name} ema=True
 early_stopping=True early_stopping_patience=5 early_stopping_monitor=exact_accuracy early_stopping_mode=max
 ```
 
+#### Maze-Hard with ConvSwiGLU (Local Mixing)
+
+Uses `ConvSwiGLU` (from URM) for improved local feature mixing in grid tasks.
+
+```bash
+run_name="pretrain_maze_conv_swiglu"
+torchrun --nproc-per-node 8 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
+arch=loop_transformer_conv \
+data_paths="[data/maze-30x30-hard-1k]" \
+evaluators="[]" \
+epochs=25000 eval_interval=5000 \
+lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 \
+run_name=${run_name} ema=True
+```
+
+#### Maze-Hard with MetricSwiGLU (Adaptive Metric Convolution)
+
+Uses `MetricSwiGLU` for adaptive local mixing based on Finsler-Randers metric geometry.
+
+```bash
+run_name="pretrain_maze_metric_swiglu"
+torchrun --nproc-per-node 8 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
+arch=loop_transformer_metric \
+data_paths="[data/maze-30x30-hard-1k]" \
+evaluators="[]" \
+epochs=25000 eval_interval=5000 \
+lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 \
+run_name=${run_name} ema=True
+```
+
 
 ### Sudoku-Extreme
 
@@ -171,6 +201,20 @@ puzzle_emb_lr=1e-4 puzzle_emb_weight_decay=1.0 \
 grad_clip_norm=-1.0 \
 run_name="pretrain_sudoku_muon-fixed-wd" \
 ema=True
+```
+
+##### Sudoku-Extreme with ConvSwiGLU
+
+```bash
+run_name="pretrain_sudoku_conv_swiglu"
+torchrun --nproc-per-node 8 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
+arch=loop_transformer_conv \
+data_paths="[data/sudoku-extreme-1k-aug-1000]" \
+evaluators="[]" \
+epochs=50000 eval_interval=5000 \
+lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 \
+grad_clip_norm=-1.0 \
+run_name=${run_name} ema=True
 ```
 
 ## Roadmap

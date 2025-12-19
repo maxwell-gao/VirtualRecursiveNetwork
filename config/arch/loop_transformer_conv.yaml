@@ -1,0 +1,55 @@
+name: looper@LoopTransformer
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+batch_size: 64
+seq_len: 1024
+vocab_size: 32  # Assuming Sudoku vocabulary
+num_puzzle_identifiers: 1000
+
+hidden_size: 512
+expansion: 4
+num_heads: 8
+pos_encodings: rope
+forward_dtype: bfloat16
+dropout: 0.0
+
+# ConvSwiGLU for local mixing
+mlp_type: conv_swiglu
+
+# Recursive State config
+states:
+  - name: z_H
+    layers: 0
+  - name: z_L
+    layers: 2
+    share_weights_with: null
+
+# Loop schedule
+outer_cycles: 1
+halt_max_steps: 16
+halt_exploration_prob: 0.1
+act_enabled: true
+
+stages:
+  - target: z_L
+    sources: [z_H]
+    include_inputs: true
+    repeat_key: L_cycles
+  - target: z_H
+    sources: [z_L]
+    include_inputs: true # URM typically adds inputs everywhere
+    repeat_key: H_cycles
+
+readout_state: z_H
+halt_state: z_L # Or z_H, depending on where decision should be made
+
+# Pseudo-cycles for schedule resolving
+H_cycles: 3
+L_cycles: 6
+
+puzzle_emb_ndim: ${.hidden_size}
+puzzle_emb_len: 16
+no_ACT_continue: true
+

@@ -171,7 +171,7 @@ def create_model(
         vocab_size += 1
 
     model_cfg = dict(
-        **config.arch.__pydantic_extra__,  # type: ignore
+        **config.arch.model_dump(exclude={"name", "loss"}),  # Use model_dump instead of __pydantic_extra__
         batch_size=config.global_batch_size // fabric.world_size,
         vocab_size=vocab_size,
         seq_len=train_metadata.seq_len,

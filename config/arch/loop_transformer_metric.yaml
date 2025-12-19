@@ -45,3 +45,6 @@ halt_state: z_H
 
 puzzle_emb_ndim: ${.hidden_size}
 puzzle_emb_len: 16
+
+# Memory optimization
+gradient_checkpointing: true

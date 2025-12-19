@@ -27,10 +27,14 @@ class TransformerBlock(nn.Module):
         mlp_type = getattr(config, "mlp_type", "swiglu")
         if mlp_type == "metric_conv":
             # Get puzzle_emb_len from config for proper grid handling
-            puzzle_emb_len = getattr(config, "puzzle_emb_len", None) or 0
-            if config.puzzle_emb_ndim > 0 and puzzle_emb_len == 0:
-                # Auto-compute if not explicitly set
-                puzzle_emb_len = -(config.puzzle_emb_ndim // -config.hidden_size)
+            # Use same logic as core.py for consistency
+            puzzle_emb_len = config.puzzle_emb_len
+            if puzzle_emb_len is None or puzzle_emb_len == 0:
+                if config.puzzle_emb_ndim > 0:
+                    # Auto-compute: ceil(puzzle_emb_ndim / hidden_size)
+                    puzzle_emb_len = -(config.puzzle_emb_ndim // -config.hidden_size)
+                else:
+                    puzzle_emb_len = 0
             self.mlp = MetricSwiGLU(
                 hidden_size=config.hidden_size,
                 expansion=config.expansion,

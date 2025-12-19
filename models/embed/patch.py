@@ -10,50 +10,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-try:
-    import torchvision.ops
-
-    HAS_TORCHVISION = True
-except ImportError:
-    HAS_TORCHVISION = False
-
-
-def _finsler_randers(v, M, w, eps=1e-6):
-    """Finsler-Randers metric: F(v) = sqrt(v^T M v) + w^T v"""
-    M_2x2 = M.reshape(M.shape[0], 2, 2, *M.shape[-2:])
-    norm = torch.sqrt(torch.einsum("bjrc,bijrc,birc->brc", v, M_2x2, v) + eps)
-    drift = torch.einsum("birc,birc->brc", w, v)
-    return norm + drift
-
-
-def _sample_tangent_ball(batch_size, M, w, kh, kw, device, eps=1e-6):
-    """Sample points on unit tangent ball using onion peeling."""
-    out_shape = M.shape[-2:]
-    u_list, s_list = [], []
-
-    for k in range(kh // 2 + 1):
-        if k == 0:
-            theta = torch.zeros(1, device=device)
-            u_list.append(torch.stack([torch.cos(theta), torch.sin(theta)], dim=1))
-            s_list.append(torch.zeros(1, device=device))
-        else:
-            n = 8 * k
-            theta = torch.linspace(0, 2 * math.pi * (1 - 1 / n), n, device=device)
-            u_list.append(torch.stack([torch.cos(theta), torch.sin(theta)], dim=1))
-            s_list.append(torch.full((n,), k / (kh // 2), device=device))
-
-    u = torch.cat(u_list, dim=0)
-    s = torch.cat(s_list)
-    N = u.shape[0]
-
-    u_exp = u.view(1, N, 2, 1, 1).expand(batch_size, -1, -1, *out_shape)
-    u_flat = u_exp.reshape(batch_size * N, 2, *out_shape)
-    M_rep = M.repeat(N, 1, 1, 1)
-    w_rep = w.repeat(N, 1, 1, 1)
-    F_u = _finsler_randers(u_flat, M_rep, w_rep, eps).view(batch_size, N, *out_shape)
-
-    y = u_exp / (F_u.unsqueeze(2) + eps) * s.view(1, N, 1, 1, 1)
-    return y.view(batch_size, kh, kw, 2, *out_shape)
+from utils.metric import (
+    _finsler_randers,
+    _sample_tangent_ball,
+    HAS_TORCHVISION,
+)
 
 
 class StandardPatchEmbed(nn.Module):

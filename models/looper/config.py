@@ -61,6 +61,8 @@ class LoopTransformerConfig(BaseModel):
     rms_norm_eps: float = 1e-5
     rope_theta: float = 10000.0
     dropout: float = 0.0
+    mlp_type: str = "swiglu"  # "swiglu", "metric_conv"
+    image_size: Optional[int] = None
 
     # Puzzle embeddings
     puzzle_emb_ndim: int = 0

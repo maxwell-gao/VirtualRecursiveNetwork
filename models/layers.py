@@ -1,8 +1,9 @@
-from typing import Tuple
+from typing import Tuple, Optional
 import einops
 import torch
 from torch import nn
 import torch.nn.functional as F
+import math
 
 # try:
 #    from flash_attn_interface import flash_attn_func  # type: ignore[import]
@@ -12,7 +13,10 @@ import torch.nn.functional as F
 from torch.nn.functional import scaled_dot_product_attention
 
 from models.common import trunc_normal_init_
+from utils.metric import get_metric_offsets, HAS_TORCHVISION
 
+if HAS_TORCHVISION:
+    import torchvision.ops
 
 CosSin = Tuple[torch.Tensor, torch.Tensor]
 
@@ -197,6 +201,143 @@ class SwiGLU(nn.Module):
     def forward(self, x):
         gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
         return self.down_proj(F.silu(gate) * up)
+
+
+class ConvSwiGLU(nn.Module):
+    """
+    SwiGLU with 1D Depthwise Convolution for local mixing.
+    Adapted from URM implementation.
+    """
+
+    def __init__(
+        self,
+        hidden_size: int,
+        expansion: float,
+        conv_kernel: int = 2,
+        intermediate_size: Optional[int] = None,
+    ):
+        super().__init__()
+
+        inter = (
+            intermediate_size
+            if intermediate_size is not None
+            else _find_multiple(round(expansion * hidden_size * 2 / 3), 256)
+        )
+        self.inter = inter
+        self.gate_up_proj = CastedLinear(hidden_size, inter * 2, bias=False)
+        
+        # Depthwise convolution
+        self.dwconv = nn.Conv1d(
+            in_channels=inter,
+            out_channels=inter,
+            kernel_size=conv_kernel,
+            padding=conv_kernel // 2,
+            groups=inter,
+            bias=True,
+        )
+
+        self.act = nn.SiLU()
+        self.down_proj = CastedLinear(inter, hidden_size, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, L, D]
+        gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
+        x_ffn = F.silu(gate) * up
+        
+        # Conv1d expects [B, C, L]
+        x_conv = self.dwconv(x_ffn.transpose(1, 2).to(self.dwconv.weight.dtype))
+        
+        # Fix shape after potential padding mismatch
+        x_conv = x_conv[..., :up.size(1)]
+        
+        x_conv = self.act(x_conv)
+        x_conv = x_conv.transpose(1, 2).contiguous()
+        x_out = self.down_proj(x_conv)
+
+        return x_out
+
+
+class MetricSwiGLU(nn.Module):
+    """
+    SwiGLU with 2D Metric-based Deformable Convolution.
+    Adapts the local mixing kernel based on the input features using Finsler-Randers metric.
+    Assumes the input sequence represents a square grid.
+    """
+
+    def __init__(self, hidden_size: int, expansion: float, kernel_size: int = 3):
+        super().__init__()
+        if not HAS_TORCHVISION:
+            raise ImportError(
+                "torchvision is required for MetricSwiGLU (deform_conv2d)"
+            )
+
+        inter = _find_multiple(round(expansion * hidden_size * 2 / 3), 256)
+        self.inter = inter
+        self.kernel_size = kernel_size
+        self.pad = kernel_size // 2
+
+        self.gate_up_proj = CastedLinear(hidden_size, inter * 2, bias=False)
+        
+        # Metric prediction network: predicts (M, w) parameters from hidden states
+        # 7 channels: 4 for M (2x2 sym), 2 for w, 1 for scale/confidence
+        self.metric_net = nn.Conv2d(inter, 7, kernel_size=3, padding=1)
+        
+        # Depthwise convolution weight
+        self.conv_weight = nn.Parameter(
+            torch.randn(inter, 1, kernel_size, kernel_size) / kernel_size
+        )
+        self.conv_bias = nn.Parameter(torch.zeros(inter))
+        
+        self.down_proj = CastedLinear(inter, hidden_size, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, L, D]
+        B, L, D = x.shape
+        
+        # Linear projection
+        gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
+        x_ffn = F.silu(gate) * up  # [B, L, inter]
+        
+        # Try to infer square grid size
+        S = int(math.sqrt(L))
+        if S * S != L:
+            # If not square, fallback to identity or simple behavior?
+            # Or raise error if we expect grid data.
+            # For robustness, let's treat it as linear if we can't square it,
+            # BUT deform_conv2d requires 2D. 
+            # So we effectively require square grids here.
+            # If there's a puzzle_emb_len, it might mess this up if included in L.
+            # URM separates puzzle_emb logic usually, but here 'x' is hidden states 
+            # which usually includes everything.
+            # If L is not square, we'll try to pad to square or fail.
+            # Let's assume for now L is square as is common in ARC models without puzzle embeddings in the main sequence,
+            # OR the sequence INCLUDES padding to be square.
+            # If it fails, the user will know to fix config.
+            raise ValueError(f"MetricSwiGLU requires square sequence length (L={L} is not square)")
+
+        # [B, inter, H, W]
+        x_2d = x_ffn.transpose(1, 2).reshape(B, self.inter, S, S)
+        
+        # Compute metric offsets
+        # metric_net expects [B, C, H, W]
+        offsets = get_metric_offsets(
+            x_2d, self.metric_net, self.kernel_size
+        )
+        
+        # Apply Deformable Convolution
+        out_2d = torchvision.ops.deform_conv2d(
+            input=x_2d,
+            offset=offsets,
+            weight=self.conv_weight.to(x_2d.dtype),
+            bias=self.conv_bias.to(x_2d.dtype),
+            padding=self.pad,
+            groups=self.inter
+        )
+        
+        # Flatten back
+        out = out_2d.reshape(B, self.inter, L).transpose(1, 2)
+        
+        return self.down_proj(out)
 
 
 def rms_norm(hidden_states: torch.Tensor, variance_epsilon: float) -> torch.Tensor:

@@ -5,7 +5,7 @@ from typing import List, Optional
 import torch
 from torch import nn
 
-from models.layers import rms_norm, SwiGLU, Attention, CosSin
+from models.layers import rms_norm, SwiGLU, ConvSwiGLU, MetricSwiGLU, Attention, CosSin
 from models.looper.config import LoopTransformerConfig
 
 
@@ -23,7 +23,21 @@ class TransformerBlock(nn.Module):
             causal=False,
             dropout=config.dropout,
         )
-        self.mlp = SwiGLU(hidden_size=config.hidden_size, expansion=config.expansion)
+        
+        mlp_type = getattr(config, "mlp_type", "swiglu")
+        if mlp_type == "metric_conv":
+            self.mlp = MetricSwiGLU(
+                hidden_size=config.hidden_size, 
+                expansion=config.expansion
+            )
+        elif mlp_type == "conv_swiglu":
+            self.mlp = ConvSwiGLU(
+                hidden_size=config.hidden_size,
+                expansion=config.expansion
+            )
+        else:
+            self.mlp = SwiGLU(hidden_size=config.hidden_size, expansion=config.expansion)
+            
         self.norm_eps = config.rms_norm_eps
         self.dropout = nn.Dropout(config.dropout)
 

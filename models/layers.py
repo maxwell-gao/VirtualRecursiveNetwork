@@ -328,7 +328,7 @@ class MetricSwiGLU(nn.Module):
             )
 
         # [B, inter, H, W]
-        x_2d = x_ffn.transpose(1, 2).reshape(B, self.inter, S, S)
+        x_2d = grid_ffn.transpose(1, 2).reshape(B, self.inter, S, S)
         
         # Compute metric offsets
         offsets = get_metric_offsets(x_2d, self.metric_net, self.kernel_size)

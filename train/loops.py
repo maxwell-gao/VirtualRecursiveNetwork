@@ -130,11 +130,10 @@ def _train_dis(
             
         # Check for NaN
         if torch.isnan(avg).any():
+            msg = f"Metric {k} is NaN in _train_dis result! Terminating training immediately."
             if fabric.global_rank == 0:
-                print(f"WARNING: Metric {k} is NaN in _train_dis result!")
-            # Replace NaN with 0.0 to ensure wandb continues logging
-            # This helps distinguish between "no log" and "nan log"
-            avg = torch.nan_to_num(avg, nan=0.0)
+                print(f"ERROR: {msg}")
+            raise ValueError(msg)
             
         result[k] = avg.to(device="cuda", dtype=torch.float32)
     return result
@@ -307,6 +306,12 @@ def train_batch(
             }
 
             reduced_metrics["train/lr"] = lr_this_step
+            
+            # Check for NaNs in reduced metrics (Global check)
+            for k, v in reduced_metrics.items():
+                if isinstance(v, (float, int)) and (math.isnan(v) or math.isinf(v)):
+                    raise ValueError(f"Metric {k} is {v}! Terminating training immediately.")
+                    
             return reduced_metrics
 
     return None

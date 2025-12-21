@@ -219,16 +219,28 @@ def launch(hydra_config: DictConfig) -> None:
         train_state.model.train()
 
         for set_name, batch, global_batch_size in train_loader:
-            metrics = train_batch(
-                config, train_state, batch, global_batch_size, fabric=fabric
-            )
+            try:
+                metrics = train_batch(
+                    config, train_state, batch, global_batch_size, fabric=fabric
+                )
 
-            if fabric.global_rank == 0 and metrics is not None:
-                wandb.log(metrics, step=train_state.step)
-                progress_bar.update(train_state.step - progress_bar.n)
+                if fabric.global_rank == 0 and metrics is not None:
+                    wandb.log(metrics, step=train_state.step)
+                    progress_bar.update(train_state.step - progress_bar.n)
 
-            if config.ema:
-                ema_helper.update(train_state.model)
+                if config.ema:
+                    ema_helper.update(train_state.model)
+            except ValueError as e:
+                if "NaN" in str(e):
+                    fabric.print(f"Training unstable (NaN detected): {e}")
+                    if fabric.global_rank == 0:
+                        # Log a failure signal to wandb so sweep knows this run was bad
+                        wandb.log({"exact_accuracy": 0.0, "accuracy": 0.0, "lm_loss": 1000.0}, step=train_state.step)
+                    # Stop training gracefully
+                    wandb.finish()
+                    return
+                else:
+                    raise e
 
         # Evaluation
         if iter_id >= config.min_eval_interval:

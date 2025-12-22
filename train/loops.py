@@ -14,7 +14,7 @@ from train.schedulers import compute_lr
 from puzzle_dataset import PuzzleDatasetMetadata
 from utils.dis import get_dis_target
 from models.losses import IGNORE_LABEL_ID
-
+import math
 
 def _train_dis(
     train_state: TrainState,
